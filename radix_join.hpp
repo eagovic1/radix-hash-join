@@ -11,6 +11,7 @@
 #pragma once
 
 #include "common.hpp"
+#include "hash_tabela.hpp"
 
 // Tabela podijeljena na particije: redovi particije p su
 // redovi[pocetak[p]] .. redovi[pocetak[p + 1] - 1].
@@ -56,18 +57,14 @@ inline Rezultat join_particija(const Particije& R, const Particije& S) {
 
     for (size_t p = 0; p < P; ++p) {
         // BUILD particije R_p
-        HashTabela tabela;
-        tabela.reserve(R.pocetak[p + 1] - R.pocetak[p]);
-        for (size_t i = R.pocetak[p]; i < R.pocetak[p + 1]; ++i)
-            tabela[R.redovi[i].key] = R.redovi[i].payload;
+        HashTabela tabela(R.redovi.data() + R.pocetak[p], R.pocetak[p + 1] - R.pocetak[p]);
 
         // PROBE particijom S_p
         for (size_t i = S.pocetak[p]; i < S.pocetak[p + 1]; ++i) {
             const Red& s = S.redovi[i];
-            auto it = tabela.find(s.key);
-            if (it != tabela.end()) {
+            if (const Red* r = tabela.nadji(s.key)) {
                 rez.broj_redova++;
-                rez.checksum += (uint64_t)it->second + s.payload;
+                rez.checksum += (uint64_t)r->payload + s.payload;
             }
         }
     }

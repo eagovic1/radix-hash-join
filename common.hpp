@@ -10,7 +10,6 @@
 #include <cstdio>
 #include <cstring>
 #include <random>
-#include <unordered_map>
 #include <vector>
 
 #ifdef __linux__
@@ -27,8 +26,6 @@ struct Red {
     uint32_t key;
     uint32_t payload;
 };
-
-using HashTabela = std::unordered_map<uint32_t, uint32_t>;  // kljuc -> payload iz R
 
 struct Rezultat {
     uint64_t broj_redova = 0;

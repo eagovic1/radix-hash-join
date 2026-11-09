@@ -4,14 +4,11 @@
 #pragma once
 
 #include "common.hpp"
+#include "hash_tabela.hpp"
 
 // BUILD: ubaci sve redove iz R u hash tabelu.
 inline HashTabela build(const std::vector<Red>& R) {
-    HashTabela tabela;
-    tabela.reserve(R.size());
-    for (const Red& r : R)
-        tabela[r.key] = r.payload;
-    return tabela;
+    return HashTabela(R.data(), R.size());
 }
 
 // PROBE: za svaki red iz S potrazi kljuc u tabeli; ako postoji, to je red rezultata.
@@ -19,10 +16,9 @@ inline HashTabela build(const std::vector<Red>& R) {
 inline Rezultat probe(const HashTabela& tabela, const std::vector<Red>& S) {
     Rezultat rez;
     for (const Red& s : S) {
-        auto it = tabela.find(s.key);
-        if (it != tabela.end()) {
+        if (const Red* r = tabela.nadji(s.key)) {
             rez.broj_redova++;
-            rez.checksum += (uint64_t)it->second + s.payload;
+            rez.checksum += (uint64_t)r->payload + s.payload;
         }
     }
     return rez;
