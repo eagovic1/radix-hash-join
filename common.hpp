@@ -1,4 +1,4 @@
-// Zajednicki dio za hash_join.cpp i radix_join.cpp:
+// Zajednicki dio za hash_join.hpp, radix_join.hpp i main.cpp:
 // tabele, generisanje podataka, provjera rezultata i mjerenje
 // (vrijeme + cache promasaji preko perf_event_open, samo Linux / WSL).
 #pragma once
@@ -62,16 +62,8 @@ inline Rezultat ocekivani_rezultat(const std::vector<Red>& S) {
     return rez;
 }
 
-inline bool provjeri(const Rezultat& rez, const Rezultat& ocekivano) {
-    if (rez.broj_redova == ocekivano.broj_redova && rez.checksum == ocekivano.checksum) {
-        std::printf("provjera: OK (%llu redova, checksum %llu)\n",
-                    (unsigned long long)rez.broj_redova, (unsigned long long)rez.checksum);
-        return true;
-    }
-    std::printf("GRESKA: join vratio %llu redova (checksum %llu), ocekivano %llu (checksum %llu)\n",
-                (unsigned long long)rez.broj_redova, (unsigned long long)rez.checksum,
-                (unsigned long long)ocekivano.broj_redova, (unsigned long long)ocekivano.checksum);
-    return false;
+inline bool isti(const Rezultat& a, const Rezultat& b) {
+    return a.broj_redova == b.broj_redova && a.checksum == b.checksum;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,35 +123,9 @@ Mjerenje mjeri(F f) {
             l1_miss.procitaj(), llc_ref.procitaj(), llc_miss.procitaj()};
 }
 
-// Ispis jedne faze: medijana/min/max vremena, brzina, i brojaci iz medijanskog
-// pokretanja (ukupno i po redu).
-// Medijana = srednji element sortiranih mjerenja (kod parnog broja gornji od dva).
-inline Mjerenje ispisi_fazu(const char* ime, std::vector<Mjerenje> m, size_t redova) {
+// Medijansko mjerenje (po vremenu): srednji element sortiranih mjerenja,
+// kod parnog broja gornji od dva. Brojaci su iz tog istog pokretanja.
+inline Mjerenje medijana(std::vector<Mjerenje> m) {
     std::sort(m.begin(), m.end(), [](const Mjerenje& a, const Mjerenje& b) { return a.ms < b.ms; });
-    const Mjerenje& med = m[m.size() / 2];
-
-    std::printf("\n%s (%zu redova)\n", ime, redova);
-    std::printf("  vrijeme:  medijana %.1f ms, min %.1f ms, max %.1f ms\n",
-                med.ms, m.front().ms, m.back().ms);
-    std::printf("  brzina:   %.1f M redova/s\n", redova / med.ms / 1e3);
-
-    auto brojac = [&](const char* naziv, long long v) {
-        if (v < 0) std::printf("  %-15s nije dostupno\n", naziv);
-        else       std::printf("  %-15s %12lld  (%.2f po redu)\n", naziv, v, (double)v / redova);
-    };
-    brojac("L1D promasaji:", med.l1_miss);
-    brojac("LLC pristupi:", med.llc_ref);
-    brojac("LLC promasaji:", med.llc_miss);
-    return med;
-}
-
-// Zbir medijana svih faza.
-inline void ispisi_ukupno(const std::vector<Mjerenje>& faze, size_t redova) {
-    Mjerenje u{0, 0, 0, 0};
-    for (const Mjerenje& f : faze) {
-        u.ms += f.ms; u.l1_miss += f.l1_miss; u.llc_ref += f.llc_ref; u.llc_miss += f.llc_miss;
-    }
-    std::printf("\nUKUPNO (zbir medijana faza, %zu redova)\n", redova);
-    std::printf("  vrijeme:  %.1f ms, %.1f M redova/s\n", u.ms, redova / u.ms / 1e3);
-    std::printf("  L1D promasaji: %lld, LLC promasaji: %lld\n", u.l1_miss, u.llc_miss);
+    return m[m.size() / 2];
 }

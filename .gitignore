@@ -1,3 +1,4 @@
 context/
+join
 hash_join
 radix_join

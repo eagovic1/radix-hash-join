@@ -1,23 +1,26 @@
 # radix-hash-join
 
-Naivni i radix hash join dvije tabele `R ⋈ S` po ključu, sa mjerenjem vremena i cache promašaja.
+Poređenje naivnog i radix hash joina dvije tabele `R ⋈ S` po ključu, sa mjerenjem vremena i cache promašaja.
 
 | Fajl | Sadržaj |
 |---|---|
-| `hash_join.cpp` | naivni hash join: build (hash tabela od cijele R) + probe (svaki red S) |
-| `radix_join.cpp` | radix hash join: particionisanje R i S, pa hash join po particijama |
-| `common.hpp` | zajednički dio: generisanje podataka, provjera rezultata, mjerenje |
+| `hash_join.hpp` | naivni hash join: build (hash tabela od cijele R) + probe (svaki red S) |
+| `radix_join.hpp` | radix hash join: particionisanje R i S, pa hash join po particijama |
+| `common.hpp` | generisanje podataka, provjera rezultata, mjerenje vremena i cache promašaja |
+| `main.cpp` | mjeri naivni join i radix join za B = 2, 4, …, 16 i ispisuje tabelu |
 
 **Podaci:** R ima ključeve `0..N_R-1` (svaki jednom, izmiješani), a S ima slučajne ključeve iz istog opsega, pa join uvijek vraća tačno `N_S` redova. Podrazumijevano je `N_R = 1 000 000` i `N_S = 10 000 000`. Oba joina koriste istu hash tabelu (`std::unordered_map`), pa se razlikuju samo po particionisanju.
 
 **Mjerenje** (po uzoru na Lab1):
 
-- prije mjerenja join se provjeri sa rezultatom izračunatim bez hash tabele;
-- 1 zagrijavanje + 10 mjerenja, ispisuju se medijana, min i max;
-- faze se mjere odvojeno (naivni: build / probe; radix: particionisanje / join po particijama), bez generisanja podataka;
-- cache promašaji se broje preko Linux `perf_event_open` posebno za svaku fazu (iz medijanskog pokretanja) i ispisuju ukupno i po redu.
+- rezultat svakog pokretanja se provjeri sa rezultatom izračunatim bez hash tabele (ovo ujedno sprečava kompajler da izbaci join);
+- 1 zagrijavanje + 10 mjerenja, u tabeli su medijane;
+- svaka verzija ima dvije faze koje se mjere odvojeno, bez generisanja podataka:
+  - naivni: faza 1 = build, faza 2 = probe;
+  - radix: faza 1 = particionisanje R i S, faza 2 = join po particijama;
+- cache promašaji se broje preko Linux `perf_event_open` i dijele brojem redova (R + S).
 
-Zbog `perf_event_open` programi rade samo na Linuxu / WSL-u.
+Zbog `perf_event_open` program radi samo na Linuxu / WSL-u.
 
 ## Radix hash join ukratko
 
@@ -40,50 +43,39 @@ Zatim u WSL-u (prvi put instaliraj kompajler):
 ```bash
 sudo apt update && sudo apt install -y g++
 
-g++ -O2 -std=c++17 hash_join.cpp -o hash_join
-g++ -O2 -std=c++17 radix_join.cpp -o radix_join
-
-./hash_join                    # [N_R] [N_S]
-./radix_join                   # [N_R] [N_S] [B], podrazumijevano B = 6
-./radix_join 1000000 10000000 10
+g++ -O2 -std=c++17 main.cpp -o join
+./join                  # [N_R] [N_S], podrazumijevano 1 000 000 i 10 000 000
 ```
+
+Vrijednosti B koje se testiraju su u nizu `RADIX_BITOVI` na vrhu `main.cpp`.
 
 ## Rezultati (i7-11800H, WSL2)
 
 Keševi: L1d 48 KB i L2 1,25 MB po jezgru, L3 24 MB zajednički.
 
-| | vrijeme | M redova/s | L1D promašaji | LLC promašaji |
-|---|---|---|---|---|
-| naivni: build | 22,0 ms | 45,5 | 2,6 M | 0,34 M |
-| naivni: probe | 183,8 ms | 54,4 | 56,1 M | 15,2 M |
-| **naivni ukupno** | **205,8 ms** | 53,5 | 58,7 M | 15,5 M |
-| radix: particionisanje | 41,8 ms | 263,2 | 4,4 M | 1,7 M |
-| radix: join po particijama | 45,8 ms | 240,4 | 30,1 M | 0,37 M |
-| **radix ukupno (B = 6)** | **87,6 ms** | 125,6 | 34,5 M | 2,1 M |
+```
+verzija         faza 1    faza 2    ukupno  ubrzanje   M red/s   L1D/red   LLC/red
+naivni            27.4     196.4     223.9     1.00x      49.1      5.51      1.48
+radix B=2         42.4      84.6     127.1     1.76x      86.6      3.94      0.30
+radix B=4         41.3      63.1     104.5     2.14x     105.3      3.32      0.23
+radix B=6         41.5      45.8      87.4     2.56x     125.9      3.12      0.19
+radix B=8         53.6      45.6      99.2     2.26x     110.9      2.77      0.27
+radix B=10        58.9      46.0     104.9     2.13x     104.8      1.15      0.26
+radix B=12        90.1      46.2     136.3     1.64x      80.7      3.13      0.27
+radix B=14       122.4      45.4     167.7     1.33x      65.6      4.68      0.28
+radix B=16       165.9      35.2     201.1     1.11x      54.7      5.05      0.32
+```
 
-Radix join je ~2,3× brži i ima ~7× manje LLC promašaja. Particionisanje košta 42 ms, ali zato join po particijama skoro uopšte ne ide u RAM (0,03 LLC promašaja po redu, a naivni probe 1,5).
+Vremena variraju par posto između pokretanja.
 
-### Izbor broja bitova B
-
-Ukupno vrijeme radix joina (R = 1 M, S = 10 M):
-
-| B | particija | redova R po particiji | particionisanje | join | ukupno |
-|---|---|---|---|---|---|
-| 0 | 1 | 1 000 000 | 50,9 ms | 226,1 ms | 277,0 ms |
-| 4 | 16 | 62 500 | 42,9 ms | 66,4 ms | 109,3 ms |
-| **6** | **64** | **15 625** | **43,9 ms** | **47,3 ms** | **91,2 ms** |
-| 8 | 256 | 3 906 | 54,7 ms | 46,8 ms | 101,6 ms |
-| 10 | 1 024 | 976 | 59,0 ms | 45,3 ms | 104,3 ms |
-| 12 | 4 096 | 244 | 88,1 ms | 47,8 ms | 135,9 ms |
-| 16 | 65 536 | 15 | 174,7 ms | 34,3 ms | 208,9 ms |
-
-- `B = 0` je jedna particija, odnosno naivni join (uz kopiranje tabela).
-- Sa većim B particije su manje, pa join brzo pada dok hash tabela particije ne stane u L2 (~B = 6), a dalje se gotovo ne mijenja.
-- Particionisanje u jednom prolazu postaje sve skuplje sa brojem particija, jer se istovremeno piše na previše mjesta u memoriji (keš i TLB). Zato je najbolje B na sredini. Za veći broj particija pravi radix join particioniše u više prolaza.
+- **Naivni join** gubi skoro sve vrijeme u probe fazi: ~1,5 LLC promašaja po redu, tj. skoro svaki probe ide u RAM.
+- **Radix join** je najbrži za **B = 6** (64 particije, ~15 600 redova R po particiji): hash tabela particije (~0,6 MB) stane u L2, join faza pada sa 196 na 46 ms, a LLC promašaja je ~7× manje. Ukupno ~2,5× brže od naivnog.
+- **Veći B** ne ubrzava join fazu (ostaje ~46 ms, L2 je već dovoljno brz), ali particionisanje postaje sve skuplje: u jednom prolazu se istovremeno piše na `2^B` mjesta u memoriji, pa raste broj promašaja u kešu i TLB-u. Zato je najbolje B na sredini. Za mnogo particija pravi radix join particioniše u više prolaza.
+- **B = 10** ima najmanje L1D promašaja: particija R ima ~1000 redova, pa njena hash tabela (~40 KB) stane i u L1 (48 KB). Vrijeme se ipak ne popravlja, jer je particionisanje već skuplje.
 
 ### Šta znače brojači
 
-- **L1D promašaji:** čitanja koja nisu našla podatak u L1 data kešu.
-- **LLC pristupi / promašaji:** pristupi zadnjem nivou keša (L3) i oni koji su morali ići u RAM.
+- **L1D/red:** promašaji L1 data keša pri čitanju, po redu (R + S).
+- **LLC/red:** promašaji zadnjeg nivoa keša (L3), tj. pristupi koji su morali ići u RAM, po redu.
 
-Ako piše `nije dostupno`, hardverski brojači nisu dostupni u tom okruženju (npr. stariji WSL ili VM bez PMU-a) ili ih blokira `/proc/sys/kernel/perf_event_paranoid` (treba biti ≤ 2). Vrijeme se ispisuje u svakom slučaju.
+Ako piše `-`, hardverski brojači nisu dostupni u tom okruženju (npr. stariji WSL ili VM bez PMU-a) ili ih blokira `/proc/sys/kernel/perf_event_paranoid` (treba biti ≤ 2). Vremena se ispisuju u svakom slučaju.

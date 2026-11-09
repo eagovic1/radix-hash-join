@@ -1,5 +1,4 @@
 // Radix hash join: R ⋈ S po kljucu (R.key = S.key).
-// Podaci, provjera i mjerenje su u common.hpp.
 //
 // Ideja: naivni hash join je spor jer je hash tabela za cijelu R prevelika
 // za keš, pa svaki probe ide u RAM. Radix join zato prvo obje tabele podijeli
@@ -9,14 +8,9 @@
 //
 //   1) PARTICIONISANJE: R -> R_0..R_{P-1}, S -> S_0..S_{P-1}
 //   2) JOIN PO PARTICIJAMA: za svaki p: build(R_p), probe(S_p)
-//
-// Samo Linux / WSL:
-//   g++ -O2 -std=c++17 radix_join.cpp -o radix_join
-//   ./radix_join [N_R] [N_S] [B]
+#pragma once
 
 #include "common.hpp"
-
-#include <cstdlib>
 
 // Tabela podijeljena na particije: redovi particije p su
 // redovi[pocetak[p]] .. redovi[pocetak[p + 1] - 1].
@@ -30,7 +24,7 @@ struct Particije {
 inline uint32_t particija(uint32_t key, uint32_t maska) { return key & maska; }
 
 // Podjela tabele na P = 2^B particija u tri koraka (kao counting sort):
-Particije particionisi(const std::vector<Red>& ulaz, int B) {
+inline Particije particionisi(const std::vector<Red>& ulaz, int B) {
     const size_t P = size_t(1) << B;
     const uint32_t maska = (uint32_t)P - 1;
 
@@ -56,7 +50,7 @@ Particije particionisi(const std::vector<Red>& ulaz, int B) {
 
 // Join po particijama: za svaku particiju obican hash join (build + probe),
 // sa istom hash tabelom kao naivni join, samo mnogo manjom.
-Rezultat join_particija(const Particije& R, const Particije& S) {
+inline Rezultat join_particija(const Particije& R, const Particije& S) {
     Rezultat rez;
     const size_t P = R.pocetak.size() - 1;
 
@@ -80,42 +74,6 @@ Rezultat join_particija(const Particije& R, const Particije& S) {
     return rez;
 }
 
-int main(int argc, char** argv) {
-    const size_t N_R = argc > 1 ? std::strtoull(argv[1], nullptr, 10) : 1'000'000;
-    const size_t N_S = argc > 2 ? std::strtoull(argv[2], nullptr, 10) : 10'000'000;
-    // Broj radix bitova. 6 je najbrze za podrazumijevane velicine na i7-11800H:
-    // particija R ima ~15 600 redova, pa njena hash tabela (~0,6 MB) stane u L2.
-    const int B      = argc > 3 ? std::atoi(argv[3]) : 6;
-
-    std::vector<Red> R, S;
-    generisi(N_R, N_S, R, S);
-    std::printf("RADIX HASH JOIN\nR: %zu redova, S: %zu redova\n", N_R, N_S);
-    std::printf("B = %d bitova -> %zu particija, ~%zu redova R po particiji\n",
-                B, size_t(1) << B, N_R >> B);
-
-    // provjera ispravnosti prije mjerenja
-    const Rezultat ocekivano = ocekivani_rezultat(S);
-    Rezultat rez = join_particija(particionisi(R, B), particionisi(S, B));
-    if (!provjeri(rez, ocekivano)) return 1;
-
-    // mjerenje: particionisanje (R i S) i join po particijama odvojeno
-    std::vector<Mjerenje> m_part, m_join;
-    for (int i = 0; i < ZAGRIJAVANJA + PONAVLJANJA; ++i) {
-        Particije Rp, Sp;
-        Mjerenje a = mjeri([&] { Rp = particionisi(R, B); Sp = particionisi(S, B); });
-        Mjerenje j = mjeri([&] { rez = join_particija(Rp, Sp); });
-
-        // Rezultat moramo iskoristiti, inace ga kompajler moze izbaciti.
-        if (rez.checksum != ocekivano.checksum) {
-            std::printf("GRESKA u pokretanju %d\n", i);
-            return 1;
-        }
-        if (i >= ZAGRIJAVANJA) { m_part.push_back(a); m_join.push_back(j); }
-    }
-
-    std::printf("%d zagrijavanje + %d mjerenja\n", ZAGRIJAVANJA, PONAVLJANJA);
-    Mjerenje a = ispisi_fazu("PARTICIONISANJE R + S", m_part, N_R + N_S);
-    Mjerenje j = ispisi_fazu("JOIN PO PARTICIJAMA (build + probe)", m_join, N_R + N_S);
-    ispisi_ukupno({a, j}, N_R + N_S);
-    return 0;
+inline Rezultat radix_join(const std::vector<Red>& R, const std::vector<Red>& S, int B) {
+    return join_particija(particionisi(R, B), particionisi(S, B));
 }
