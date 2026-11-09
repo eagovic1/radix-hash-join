@@ -1,24 +1,32 @@
 # radix-hash-join
 
-## Naivni hash join (`hash_join.cpp`)
+Naivni i radix hash join dvije tabele `R ⋈ S` po ključu, sa mjerenjem vremena i cache promašaja.
 
-Jednostavan hash join dvije tabele `R ⋈ S` po ključu, sa `std::unordered_map`:
+| Fajl | Sadržaj |
+|---|---|
+| `hash_join.cpp` | naivni hash join: build (hash tabela od cijele R) + probe (svaki red S) |
+| `radix_join.cpp` | radix hash join: particionisanje R i S, pa hash join po particijama |
+| `common.hpp` | zajednički dio: generisanje podataka, provjera rezultata, mjerenje |
 
-- **build:** svi redovi manje tabele R idu u hash tabelu;
-- **probe:** za svaki red veće tabele S traži se ključ u hash tabeli.
+**Podaci:** R ima ključeve `0..N_R-1` (svaki jednom, izmiješani), a S ima slučajne ključeve iz istog opsega, pa join uvijek vraća tačno `N_S` redova. Podrazumijevano je `N_R = 1 000 000` i `N_S = 10 000 000`. Oba joina koriste istu hash tabelu (`std::unordered_map`), pa se razlikuju samo po particionisanju.
 
-R ima ključeve `0..N_R-1` (svaki jednom, izmiješani), a S ima slučajne ključeve iz istog opsega, pa join uvijek vraća tačno `N_S` redova.
-
-Mjerenje (po uzoru na Lab1):
+**Mjerenje** (po uzoru na Lab1):
 
 - prije mjerenja join se provjeri sa rezultatom izračunatim bez hash tabele;
 - 1 zagrijavanje + 10 mjerenja, ispisuju se medijana, min i max;
-- build i probe se mjere odvojeno, bez generisanja podataka;
-- cache promašaji se broje preko Linux `perf_event_open` posebno za svaku fazu (iz medijanskog pokretanja) i ispisuju ukupno i po redu ulazne tabele.
+- faze se mjere odvojeno (naivni: build / probe; radix: particionisanje / join po particijama), bez generisanja podataka;
+- cache promašaji se broje preko Linux `perf_event_open` posebno za svaku fazu (iz medijanskog pokretanja) i ispisuju ukupno i po redu.
 
-Zbog `perf_event_open` program radi samo na Linuxu / WSL-u.
+Zbog `perf_event_open` programi rade samo na Linuxu / WSL-u.
 
-### Pokretanje u WSL-u
+## Radix hash join ukratko
+
+Naivni join je spor jer hash tabela za cijelu R (desetine MB) ne stane u keš, pa skoro svaki probe ide u RAM. Radix join zato:
+
+1. **particionisanje:** obje tabele podijeli na `P = 2^B` particija po donjih `B` bitova ključa (histogram → prefiksni zbir → raspodjela, kao counting sort). Redovi sa istim ključem uvijek završe u particiji istog broja;
+2. **join po particijama:** za svaku particiju `p` napravi hash tabelu od `R_p` i probaj je redovima iz `S_p`. Tabela jedne particije je mala i stane u keš.
+
+## Pokretanje u WSL-u
 
 Iz PowerShella otvori WSL u folderu projekta:
 
@@ -33,42 +41,47 @@ Zatim u WSL-u (prvi put instaliraj kompajler):
 sudo apt update && sudo apt install -y g++
 
 g++ -O2 -std=c++17 hash_join.cpp -o hash_join
-./hash_join              # podrazumijevano: N_R = 1 000 000, N_S = 10 000 000
-./hash_join 10000 10000000   # mala R tabela, stane u keš
+g++ -O2 -std=c++17 radix_join.cpp -o radix_join
+
+./hash_join                    # [N_R] [N_S]
+./radix_join                   # [N_R] [N_S] [B], podrazumijevano B = 6
+./radix_join 1000000 10000000 10
 ```
 
-### Primjer izlaza
+## Rezultati (i7-11800H, WSL2)
 
-```
-R: 1000000 redova, S: 10000000 redova
-provjera: OK (10000000 redova, checksum 84999207147809)
-1 zagrijavanje + 10 mjerenja
+Keševi: L1d 48 KB i L2 1,25 MB po jezgru, L3 24 MB zajednički.
 
-BUILD (1000000 redova)
-  vrijeme:  medijana 27.3 ms, min 26.1 ms, max 45.8 ms
-  brzina:   36.7 M redova/s
-  L1D promasaji:       2606911  (2.61 po redu)
-  LLC pristupi:        2371729  (2.37 po redu)
-  LLC promasaji:        517195  (0.52 po redu)
+| | vrijeme | M redova/s | L1D promašaji | LLC promašaji |
+|---|---|---|---|---|
+| naivni: build | 22,0 ms | 45,5 | 2,6 M | 0,34 M |
+| naivni: probe | 183,8 ms | 54,4 | 56,1 M | 15,2 M |
+| **naivni ukupno** | **205,8 ms** | 53,5 | 58,7 M | 15,5 M |
+| radix: particionisanje | 41,8 ms | 263,2 | 4,4 M | 1,7 M |
+| radix: join po particijama | 45,8 ms | 240,4 | 30,1 M | 0,37 M |
+| **radix ukupno (B = 6)** | **87,6 ms** | 125,6 | 34,5 M | 2,1 M |
 
-PROBE (10000000 redova)
-  vrijeme:  medijana 219.8 ms, min 212.3 ms, max 249.9 ms
-  brzina:   45.5 M redova/s
-  L1D promasaji:      55744049  (5.57 po redu)
-  LLC pristupi:       33861177  (3.39 po redu)
-  LLC promasaji:      18041129  (1.80 po redu)
+Radix join je ~2,3× brži i ima ~7× manje LLC promašaja. Particionisanje košta 42 ms, ali zato join po particijama skoro uopšte ne ide u RAM (0,03 LLC promašaja po redu, a naivni probe 1,5).
 
-UKUPNO (build + probe medijana): 247.1 ms, 44.5 M redova/s
-```
+### Izbor broja bitova B
 
-Probe faza (medijana):
+Ukupno vrijeme radix joina (R = 1 M, S = 10 M):
 
-| N_R | N_S | vrijeme | M redova/s | L1D prom./red | LLC prom./red |
+| B | particija | redova R po particiji | particionisanje | join | ukupno |
 |---|---|---|---|---|---|
-| 10 000 | 10 000 000 | 23,6 ms | 423,6 | 2,81 | 0,04 |
-| 1 000 000 | 10 000 000 | 219,8 ms | 45,5 | 5,57 | 1,80 |
+| 0 | 1 | 1 000 000 | 50,9 ms | 226,1 ms | 277,0 ms |
+| 4 | 16 | 62 500 | 42,9 ms | 66,4 ms | 109,3 ms |
+| **6** | **64** | **15 625** | **43,9 ms** | **47,3 ms** | **91,2 ms** |
+| 8 | 256 | 3 906 | 54,7 ms | 46,8 ms | 101,6 ms |
+| 10 | 1 024 | 976 | 59,0 ms | 45,3 ms | 104,3 ms |
+| 12 | 4 096 | 244 | 88,1 ms | 47,8 ms | 135,9 ms |
+| 16 | 65 536 | 15 | 174,7 ms | 34,3 ms | 208,9 ms |
 
-Isti broj probe operacija, ali kad hash tabela ne stane u keš, probe je ~9× sporiji, a gotovo svaki red ide u RAM (1,8 LLC promašaja po redu umjesto 0,04). Ovo je problem koji radix hash join rješava particionisanjem.
+- `B = 0` je jedna particija, odnosno naivni join (uz kopiranje tabela).
+- Sa većim B particije su manje, pa join brzo pada dok hash tabela particije ne stane u L2 (~B = 6), a dalje se gotovo ne mijenja.
+- Particionisanje u jednom prolazu postaje sve skuplje sa brojem particija, jer se istovremeno piše na previše mjesta u memoriji (keš i TLB). Zato je najbolje B na sredini. Za veći broj particija pravi radix join particioniše u više prolaza.
+
+### Šta znače brojači
 
 - **L1D promašaji:** čitanja koja nisu našla podatak u L1 data kešu.
 - **LLC pristupi / promašaji:** pristupi zadnjem nivou keša (L3) i oni koji su morali ići u RAM.
