@@ -7,7 +7,16 @@ Jednostavan hash join dvije tabele `R ⋈ S` po ključu, sa `std::unordered_map`
 - **build:** svi redovi manje tabele R idu u hash tabelu;
 - **probe:** za svaki red veće tabele S traži se ključ u hash tabeli.
 
-R ima ključeve `0..N_R-1` (svaki jednom, izmiješani), a S ima slučajne ključeve iz istog opsega, pa join uvijek vraća tačno `N_S` redova. Program mjeri vrijeme samo za join (bez generisanja podataka) i broji cache promašaje preko Linux `perf_event_open`. Zato radi samo na Linuxu / WSL-u.
+R ima ključeve `0..N_R-1` (svaki jednom, izmiješani), a S ima slučajne ključeve iz istog opsega, pa join uvijek vraća tačno `N_S` redova.
+
+Mjerenje (po uzoru na Lab1):
+
+- prije mjerenja join se provjeri sa rezultatom izračunatim bez hash tabele;
+- 1 zagrijavanje + 10 mjerenja, ispisuju se medijana, min i max;
+- build i probe se mjere odvojeno, bez generisanja podataka;
+- cache promašaji se broje preko Linux `perf_event_open` posebno za svaku fazu (iz medijanskog pokretanja) i ispisuju ukupno i po redu ulazne tabele.
+
+Zbog `perf_event_open` program radi samo na Linuxu / WSL-u.
 
 ### Pokretanje u WSL-u
 
@@ -32,19 +41,34 @@ g++ -O2 -std=c++17 hash_join.cpp -o hash_join
 
 ```
 R: 1000000 redova, S: 10000000 redova
-rezultat: 10000000 redova (ocekivano 10000000), checksum 84999207147809
-vrijeme: 223.1 ms
-L1D promasaji:   59359817
-LLC pristupi:    36049787
-LLC promasaji:   14936834
+provjera: OK (10000000 redova, checksum 84999207147809)
+1 zagrijavanje + 10 mjerenja
+
+BUILD (1000000 redova)
+  vrijeme:  medijana 27.3 ms, min 26.1 ms, max 45.8 ms
+  brzina:   36.7 M redova/s
+  L1D promasaji:       2606911  (2.61 po redu)
+  LLC pristupi:        2371729  (2.37 po redu)
+  LLC promasaji:        517195  (0.52 po redu)
+
+PROBE (10000000 redova)
+  vrijeme:  medijana 219.8 ms, min 212.3 ms, max 249.9 ms
+  brzina:   45.5 M redova/s
+  L1D promasaji:      55744049  (5.57 po redu)
+  LLC pristupi:       33861177  (3.39 po redu)
+  LLC promasaji:      18041129  (1.80 po redu)
+
+UKUPNO (build + probe medijana): 247.1 ms, 44.5 M redova/s
 ```
 
-| N_R | N_S | vrijeme | L1D promašaji | LLC promašaji |
-|---|---|---|---|---|
-| 10 000 | 10 000 000 | 24,8 ms | 28,2 M | 0,35 M |
-| 1 000 000 | 10 000 000 | 223,1 ms | 59,4 M | 14,9 M |
+Probe faza (medijana):
 
-Isti broj probe operacija, ali kad hash tabela ne stane u keš, join je ~9× sporiji, a LLC promašaja je ~40× više. Ovo je problem koji radix hash join rješava particionisanjem.
+| N_R | N_S | vrijeme | M redova/s | L1D prom./red | LLC prom./red |
+|---|---|---|---|---|---|
+| 10 000 | 10 000 000 | 23,6 ms | 423,6 | 2,81 | 0,04 |
+| 1 000 000 | 10 000 000 | 219,8 ms | 45,5 | 5,57 | 1,80 |
+
+Isti broj probe operacija, ali kad hash tabela ne stane u keš, probe je ~9× sporiji, a gotovo svaki red ide u RAM (1,8 LLC promašaja po redu umjesto 0,04). Ovo je problem koji radix hash join rješava particionisanjem.
 
 - **L1D promašaji:** čitanja koja nisu našla podatak u L1 data kešu.
 - **LLC pristupi / promašaji:** pristupi zadnjem nivou keša (L3) i oni koji su morali ići u RAM.
