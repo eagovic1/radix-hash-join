@@ -1,8 +1,8 @@
 // Poredjenje naivnog i radix hash joina na istim podacima.
 // Radix join se mjeri za vise vrijednosti B (broj radix bitova, 2^B particija).
 //
-// Samo Linux / WSL:
-//   g++ -O2 -std=c++17 main.cpp -o join
+// Prevodjenje i pokretanje: vidi README.md.
+// Cache promasaji se mjere samo na Linuxu (i WSL-u).
 //   ./join [N_R] [N_S]
 
 #include "hash_join.hpp"

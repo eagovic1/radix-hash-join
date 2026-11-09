@@ -1,6 +1,6 @@
 // Zajednicki dio za hash_join.hpp, radix_join.hpp i main.cpp:
 // tabele, generisanje podataka, provjera rezultata i mjerenje
-// (vrijeme + cache promasaji preko perf_event_open, samo Linux / WSL).
+// (vrijeme na svim sistemima, cache promasaji preko perf_event_open samo na Linuxu).
 #pragma once
 
 #include <algorithm>
@@ -13,10 +13,12 @@
 #include <unordered_map>
 #include <vector>
 
+#ifdef __linux__
 #include <linux/perf_event.h>
 #include <sys/ioctl.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#endif
 
 const int ZAGRIJAVANJA = 1;   // pokretanja koja se ne mjere
 const int PONAVLJANJA = 10;   // mjerena pokretanja
@@ -69,7 +71,11 @@ inline bool isti(const Rezultat& a, const Rezultat& b) {
 // ---------------------------------------------------------------------------
 // Brojac hardverskog dogadjaja (npr. cache promasaja) preko perf_event_open.
 // Broji samo za ovaj proces, samo nas (user-space) kod, izmedju start() i stop().
+// perf_event_open postoji samo na Linuxu; na Windowsu i macOS-u brojaci
+// vracaju -1, pa se u tabeli ispisuje "-", a vrijeme se mjeri normalno.
 // ---------------------------------------------------------------------------
+#ifdef __linux__
+
 struct Brojac {
     int fd;
 
@@ -101,6 +107,17 @@ const uint64_t L1D_READ_MISS = PERF_COUNT_HW_CACHE_L1D
 inline Brojac l1_miss(PERF_TYPE_HW_CACHE, L1D_READ_MISS);                  // L1 data keš
 inline Brojac llc_ref(PERF_TYPE_HARDWARE, PERF_COUNT_HW_CACHE_REFERENCES);  // zadnji nivo (LLC)
 inline Brojac llc_miss(PERF_TYPE_HARDWARE, PERF_COUNT_HW_CACHE_MISSES);
+
+#else  // Windows, macOS: nema brojaca
+
+struct Brojac {
+    void start() {}
+    void stop() {}
+    long long procitaj() const { return -1; }
+};
+inline Brojac l1_miss, llc_ref, llc_miss;
+
+#endif
 
 // Rezultat jednog mjerenja jedne faze.
 struct Mjerenje {
