@@ -42,7 +42,7 @@ Faze mjeri_radix(const std::vector<Red>& R, const std::vector<Red>& S, int B, co
         Particije Rp, Sp;
         Rezultat rez;
         Mjerenje a = mjeri([&] { Rp = particionisi(R, B); Sp = particionisi(S, B); });
-        Mjerenje b = mjeri([&] { rez = join_particija(Rp, Sp); });
+        Mjerenje b = mjeri([&] { rez = join_particija(Rp, Sp, B); });
 
         if (!isti(rez, ocekivano)) return {a, b, false};
         if (i >= ZAGRIJAVANJA) { m1.push_back(a); m2.push_back(b); }

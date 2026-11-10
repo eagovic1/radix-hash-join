@@ -51,26 +51,29 @@ inline Particije particionisi(const std::vector<Red>& ulaz, int B) {
 
 // Join po particijama: za svaku particiju obican hash join (build + probe),
 // sa istom hash tabelom kao naivni join, samo mnogo manjom.
-inline Rezultat join_particija(const Particije& R, const Particije& S) {
+// B = broj radix bitova kojim su R i S particionisani.
+inline Rezultat join_particija(const Particije& R, const Particije& S, int B) {
     Rezultat rez;
     const size_t P = R.pocetak.size() - 1;
 
     for (size_t p = 0; p < P; ++p) {
-        // BUILD particije R_p
-        HashTabela tabela(R.redovi.data() + R.pocetak[p], R.pocetak[p + 1] - R.pocetak[p]);
+        // BUILD particije R_p. Svi kljucevi u particiji imaju istih donjih B bitova,
+        // pa hash mora te bitove preskociti (pomak = B), inace bi svi kljucevi
+        // particije pali u mali broj bucketa (vidi komentar u hash_tabela.hpp).
+        HashTabela tabela(R.redovi.data() + R.pocetak[p], R.pocetak[p + 1] - R.pocetak[p], B);
 
-        // PROBE particijom S_p
+        // PROBE particijom S_p: svaki par sa istim kljucem je red rezultata
         for (size_t i = S.pocetak[p]; i < S.pocetak[p + 1]; ++i) {
             const Red& s = S.redovi[i];
-            if (const Red* r = tabela.nadji(s.key)) {
+            tabela.za_svaki(s.key, [&](const Red& r) {
                 rez.broj_redova++;
-                rez.checksum += (uint64_t)r->payload + s.payload;
-            }
+                rez.checksum += (uint64_t)r.payload + s.payload;
+            });
         }
     }
     return rez;
 }
 
 inline Rezultat radix_join(const std::vector<Red>& R, const std::vector<Red>& S, int B) {
-    return join_particija(particionisi(R, B), particionisi(S, B));
+    return join_particija(particionisi(R, B), particionisi(S, B), B);
 }

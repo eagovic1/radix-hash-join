@@ -1,13 +1,18 @@
-// Hash tabela sa bucketima, za build stranu joina (redovi iz R).
+// Naivna lancana hash tabela sa cvorovima, za build stranu joina (redovi iz R).
 //
-// Redovi se ne kopiraju: tabela pamti samo indekse u postojeci niz redova.
-// Svaki bucket je lanac redova povezan indeksima:
+// Ovo je NAMJERNO spora referentna verzija, koja ostavlja prostor za optimizaciju.
+// Namjerne slabosti (optimizovati ih jednu po jednu):
 //
-//   prvi[b]      = indeks prvog reda u bucketu b (ili PRAZNO)
-//   sljedeci[i]  = indeks sljedeceg reda u istom bucketu kao red i (ili PRAZNO)
+//   [1] svaki red je u posebnom cvoru alociranom sa new -> cvorovi su rasuti po
+//       memoriji, pa je obilazak lanca pointer chasing (svaki korak novi skok)
+//   [2] red se kopira u cvor (+ 8 B pokazivaca po redu)
+//   [3] % u hash funkciji (dijeljenje) umjesto & maske
+//   [4] broj bucketa = n -> duzi lanci nego sa 2n
+//   [5] probe obilazi cijeli lanac s grananjem (ne staje na prvom pogotku)
+//   [6] u radix joinu se za svaku particiju alocira nova tabela (new/delete po cvoru)
 //
-// Za razliku od std::unordered_map nema alokacije po elementu: cijela tabela su
-// dva niza uint32_t (4 B po bucketu + 4 B po redu), pa je mala i kompaktna.
+// Struktura: _bucketi[b] pokazuje na prvi cvor lanca bucketa b (ili nullptr),
+// a svaki cvor pokazuje na sljedeci cvor u istom lancu.
 #pragma once
 
 #include "common.hpp"
@@ -16,49 +21,75 @@ class HashTabela {
 public:
     HashTabela() = default;
 
-    // BUILD: ubaci redove[0..n-1] u tabelu. Niz redova mora postojati dok se tabela koristi.
-    HashTabela(const Red* redovi, size_t n) : _redovi(redovi) {
-        // broj bucketa: najmanji stepen dvojke >= 2n (najvise pola reda po bucketu,
-        // pa su lanci kratki i probe najcesce nadje red u prvom koraku)
-        _bitova = 1;
-        while ((size_t(1) << _bitova) < 2 * n) _bitova++;
-
-        _prvi.assign(size_t(1) << _bitova, PRAZNO);
-        _sljedeci.resize(n);
-
-        // Svaki red stavljamo na pocetak lanca svog bucketa.
-        for (uint32_t i = 0; i < n; ++i) {
-            uint32_t b = bucket(redovi[i].key);
-            _sljedeci[i] = _prvi[b];
-            _prvi[b] = i;
+    // BUILD: ubaci redove[0..n-1] u tabelu. Svaki red se kopira u novi cvor [1][2].
+    //
+    // pomak: koliko donjih bitova kljuca hash preskace. Naivni join koristi 0.
+    // U radix joinu svi kljucevi jedne particije imaju istih donjih B bitova
+    // (po njima su particionisani). Kad bi hash koristio i te bitove, kljucevi
+    // particije bi bili oblika p + k * 2^B, pa bi (kljuc * c) % broj_bucketa
+    // pao u mali broj bucketa: lanci bi bili ogromni i join bi se zaglavio.
+    // Zato radix join pravi tabelu sa pomak = B, pa hash vidi samo k.
+    HashTabela(const Red* redovi, size_t n, int pomak = 0)
+        : _bucketi(n > 0 ? n : 1, nullptr), _pomak(pomak) {  // broj bucketa = n [4]
+        for (size_t i = 0; i < n; ++i) {
+            Cvor*& prvi = _bucketi[bucket(redovi[i].key)];
+            prvi = new Cvor{redovi[i], prvi};  // novi cvor na pocetak lanca
         }
     }
 
-    // PROBE: vrati red iz R sa datim kljucem, ili nullptr ako ga nema.
-    // (Kod nas su kljucevi u R jedinstveni, pa je dovoljan prvi pogodak.)
-    const Red* nadji(uint32_t key) const {
-        for (uint32_t i = _prvi[bucket(key)]; i != PRAZNO; i = _sljedeci[i])
-            if (_redovi[i].key == key)
-                return &_redovi[i];
-        return nullptr;
+    ~HashTabela() { oslobodi(); }
+
+    // Kopiranje je zabranjeno (cvorovi bi se oslobodili dvaput), premjestanje je dozvoljeno.
+    HashTabela(const HashTabela&) = delete;
+    HashTabela& operator=(const HashTabela&) = delete;
+
+    HashTabela(HashTabela&& o) noexcept
+        : _bucketi(std::move(o._bucketi)), _pomak(o._pomak) {
+        o._bucketi.clear();  // premjestena tabela je prazna
+    }
+
+    HashTabela& operator=(HashTabela&& o) noexcept {
+        if (this != &o) {
+            oslobodi();  // prvo oslobodi svoje postojece cvorove
+            _bucketi = std::move(o._bucketi);
+            _pomak = o._pomak;
+            o._bucketi.clear();
+        }
+        return *this;
+    }
+
+    // PROBE: pozovi f(red) za svaki red iz R sa datim kljucem.
+    // Obilazi cijeli lanac [5], jer kljucevi u R (kao u pravoj bazi) ne moraju
+    // biti jedinstveni.
+    template <class F>
+    void za_svaki(uint32_t key, F f) const {
+        if (_bucketi.empty()) return;  // prazna / premjestena tabela
+        for (const Cvor* c = _bucketi[bucket(key)]; c != nullptr; c = c->sljedeci)
+            if (c->red.key == key)
+                f(c->red);
     }
 
 private:
-    static constexpr uint32_t PRAZNO = UINT32_MAX;
+    struct Cvor {
+        Red red;          // kopija reda [2]
+        Cvor* sljedeci;   // sljedeci cvor u lancu
+    };
 
-    // Bucket = donjih _bitova bitova hasha kljuca. Hash je finalizer iz MurmurHash3:
-    // dobro izmijesa sve bitove kljuca, pa se i uzastopni kljucevi, i kljucevi
-    // jedne radix particije (svi imaju iste donje bitove), ravnomjerno rasporede.
-    uint32_t bucket(uint32_t key) const {
-        uint32_t h = key;
-        h ^= h >> 16; h *= 0x85ebca6bu;
-        h ^= h >> 13; h *= 0xc2b2ae35u;
-        h ^= h >> 16;
-        return h & ((uint32_t(1) << _bitova) - 1);
+    // Multiplikativni hash, pa % broj bucketa [3].
+    size_t bucket(uint32_t key) const {
+        return (uint64_t)(key >> _pomak) * 2654435761ull % _bucketi.size();
     }
 
-    const Red* _redovi = nullptr;
-    int _bitova = 1;
-    std::vector<uint32_t> _prvi;      // po bucketu
-    std::vector<uint32_t> _sljedeci;  // po redu
+    void oslobodi() {
+        for (Cvor* c : _bucketi)
+            while (c != nullptr) {
+                Cvor* sljedeci = c->sljedeci;
+                delete c;
+                c = sljedeci;
+            }
+        _bucketi.clear();
+    }
+
+    std::vector<Cvor*> _bucketi;
+    int _pomak = 0;
 };
