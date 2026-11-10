@@ -11,7 +11,7 @@
 
 #include <cstdlib>
 
-const int RADIX_BITOVI[] = {2, 4, 6, 8, 10, 12, 14, 16};
+const int RADIX_BITOVI[] = {2, 4, 6, 8};
 
 // Medijane dvije faze jedne verzije joina.
 struct Faze {

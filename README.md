@@ -22,7 +22,7 @@ Tabela od čvorova je namjerno spora referentna verzija: na vrhu [`hash_tabela.h
 
 | Fajl | Sadržaj |
 |---|---|
-| [`main.cpp`](main.cpp) | mjeri sve tri verzije (radix za B = 2, 4, …, 16) i ispisuje tabelu |
+| [`main.cpp`](main.cpp) | mjeri sve tri verzije (radix za B = 2, 4, 6, 8) i ispisuje tabelu |
 | [`hash_join.hpp`](hash_join.hpp) | naivni hash join: build (hash tabela od cijele R) + probe (svaki red S) |
 | [`radix_join.hpp`](radix_join.hpp) | radix hash join (sa čvorovima i sa nizovima): particionisanje R i S, pa hash join po particijama |
 | [`hash_tabela.hpp`](hash_tabela.hpp) | lančana hash tabela sa čvorovima, sa spiskom namjernih slabosti za optimizaciju |
