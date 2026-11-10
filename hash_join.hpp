@@ -4,16 +4,16 @@
 #pragma once
 
 #include "common.hpp"
-#include "hash_tabela.hpp"
+#include "cvor_tabela.hpp"
 
 // BUILD: ubaci sve redove iz R u hash tabelu (pomak = 0: hash koristi sve bitove kljuca).
-inline HashTabela build(const std::vector<Red>& R) {
-    return HashTabela(R.data(), R.size(), 0);
+inline CvorTabela build(const std::vector<Red>& R) {
+    return CvorTabela(R.data(), R.size(), 0);
 }
 
 // PROBE: za svaki red iz S nadji sve redove iz R sa istim kljucem; svaki par je
 // red rezultata. Rezultat ne cuvamo u memoriji, nego brojimo redove i sabiramo payload-e.
-inline Rezultat probe(const HashTabela& tabela, const std::vector<Red>& S) {
+inline Rezultat probe(const CvorTabela& tabela, const std::vector<Red>& S) {
     Rezultat rez;
     for (const Red& s : S) {
         tabela.za_svaki(s.key, [&](const Red& r) {

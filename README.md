@@ -10,16 +10,18 @@ Poređenje četiri verzije hash joina dvije tabele `R ⋈ S` po ključu. Program
 
 ## Četiri verzije
 
-| Verzija | Šta radi | Hash tabela |
+Naziv svake verzije je način joina + raspored hash tabele. Tri radix verzije imaju isto particionisanje i razlikuju se samo po tome kako su redovi jednog bucketa smješteni u memoriji.
+
+| Verzija | Šta radi | Hash tabela (raspored bucketa) |
 |---|---|---|
-| **naivni** | jedna hash tabela za cijelu R (build), pa probe svakim redom S | lančana tabela od čvorova ([`hash_tabela.hpp`](hash_tabela.hpp)) |
-| **radix** | R i S se podijele na 2^B particija po donjih B bitova ključa, pa hash join po particijama | ista tabela od čvorova, nova za svaku particiju |
-| **radix niz** | isto particionisanje kao radix | tabela od nizova indeksa ([`niz_tabela.hpp`](niz_tabela.hpp)), jedna za sve particije |
-| **radix bucket** | isto particionisanje kao radix | svaki bucket je uzastopan komad niza, bez lanca ([`bucket_tabela.hpp`](bucket_tabela.hpp)), jedna za sve particije |
+| **naivni** | jedna hash tabela za cijelu R (build), pa probe svakim redom S | lista čvorova alociranih sa `new` ([`cvor_tabela.hpp`](cvor_tabela.hpp)) |
+| **radix čvorovi** | R i S se podijele na 2^B particija po donjih B bitova ključa, pa hash join po particijama | ista tabela od čvorova, nova za svaku particiju |
+| **radix lanac** | isto particionisanje | lanac kroz nizove indeksa ([`lanac_tabela.hpp`](lanac_tabela.hpp)), jedna tabela za sve particije |
+| **radix CSR** | isto particionisanje | uzastopan komad jednog niza, bez lanca ([`csr_tabela.hpp`](csr_tabela.hpp)), jedna tabela za sve particije |
 
-Tabela od čvorova je namjerno spora referentna verzija: na vrhu [`hash_tabela.hpp`](hash_tabela.hpp) su numerisane njene slabosti [1]–[6]. Tabela od nizova uklanja [1], [2], [3] i [6]. Tabela sa bucketima kao komadima niza uklanja i [5] (obilazak lanca), a [4] ostaje.
+Tabela od čvorova je namjerno spora referentna verzija: na vrhu [`cvor_tabela.hpp`](cvor_tabela.hpp) su numerisane njene slabosti [1]–[6]. Radix lanac uklanja [1], [2], [3] i [6], a radix CSR uklanja i [5] (obilazak lanca). [4] ostaje u svim verzijama.
 
-Na našim podacima (gusti ključevi, savršeni lanci od jednog reda) radix bucket ima ~15–20% brži probe, ali 4–5× skuplji build (redovi se premještaju po bucketima), pa ukupno nije brži od radix niz.
+Na našim podacima (gusti ključevi, savršeni lanci od jednog reda) radix CSR ima ~15–20% brži probe, ali 4–5× skuplji build (redovi se premještaju po bucketima), pa ukupno nije brži od radix lanac.
 
 ## Fajlovi
 
@@ -27,10 +29,10 @@ Na našim podacima (gusti ključevi, savršeni lanci od jednog reda) radix bucke
 |---|---|
 | [`main.cpp`](main.cpp) | mjeri sve četiri verzije (radix za B = 2, 4, 6, 8) i ispisuje tabelu |
 | [`hash_join.hpp`](hash_join.hpp) | naivni hash join: build (hash tabela od cijele R) + probe (svaki red S) |
-| [`radix_join.hpp`](radix_join.hpp) | radix hash join (sa čvorovima, nizovima i bucketima kao komadima niza): particionisanje R i S, pa hash join po particijama |
-| [`hash_tabela.hpp`](hash_tabela.hpp) | lančana hash tabela sa čvorovima, sa spiskom namjernih slabosti za optimizaciju |
-| [`niz_tabela.hpp`](niz_tabela.hpp) | hash tabela od nizova indeksa, bez čvorova i bez alokacije po particiji |
-| [`bucket_tabela.hpp`](bucket_tabela.hpp) | hash tabela u kojoj je svaki bucket uzastopan komad niza (histogram → prefiksni zbir → raspodjela) |
+| [`radix_join.hpp`](radix_join.hpp) | particionisanje R i S, i join po particijama za sve tri radix verzije (čvorovi, lanac, CSR) |
+| [`cvor_tabela.hpp`](cvor_tabela.hpp) | `CvorTabela`: lančana hash tabela sa čvorovima, sa spiskom namjernih slabosti za optimizaciju |
+| [`lanac_tabela.hpp`](lanac_tabela.hpp) | `LanacTabela`: bucket je lanac kroz nizove indeksa, bez čvorova i bez alokacije po particiji |
+| [`csr_tabela.hpp`](csr_tabela.hpp) | `CsrTabela`: bucket je uzastopan komad niza (histogram → prefiksni zbir → raspodjela) |
 | [`common.hpp`](common.hpp) | generisanje podataka, provjera rezultata, mjerenje vremena i cache promašaja |
 | [`duckdb_join.py`](duckdb_join.py) | isti join u DuckDB-u, za poređenje |
 

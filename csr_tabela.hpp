@@ -1,5 +1,6 @@
-// Hash tabela u kojoj je svaki bucket uzastopan komad niza, za build stranu
-// radix joina (redovi jedne particije R).
+// CsrTabela: hash tabela u kojoj je svaki bucket uzastopan komad niza, za build stranu
+// radix joina (redovi jedne particije R). Koristi je verzija "radix CSR". Naziv dolazi
+// od CSR (compressed sparse row): jedan niz vrijednosti + niz pocetaka, kao kod rijetkih matrica.
 //
 // Build preuredi redove particije po bucketima, istim postupkom kao particionisi()
 // (histogram -> prefiksni zbir -> raspodjela), samo po bucketima umjesto po particijama:
@@ -11,12 +12,12 @@
 // Primjer (4 bucketa, histogram 2, 3, 0, 1):
 //   _redovi  = [ 12 20 | 7 3 9 | 15 ]      _pocetak = [ 0, 2, 5, 5, 6 ]
 //
-// U odnosu na NizTabela (niz_tabela.hpp) ova verzija uklanja slabost:
+// U odnosu na LanacTabela (lanac_tabela.hpp) ova verzija uklanja slabost:
 //   [5] nema lanca: probe zna unaprijed koliko redova ima bucket i gdje su
 //       (jedan do drugog), pa ne cita "sljedeci" da bi nasao kraj lanca, i umjesto
 //       tri nasumicna pristupa po koraku (_prvi, _redovi, _sljedeci) ima dva:
 //       _pocetak[b] i _pocetak[b + 1] (susjedni, ista keš linija), pa redove bucketa
-// Sve ostalo je isto kao u NizTabela, da se vidi efekat samo ove promjene:
+// Sve ostalo je isto kao u LanacTabela, da se vidi efekat samo ove promjene:
 // isti hash i pomak, isti broj bucketa ([4] ostaje), jedna tabela za sve particije.
 // Kljucevi u R i dalje ne moraju biti jedinstveni: probe pregleda cijeli bucket.
 //
@@ -26,15 +27,15 @@
 
 #include "common.hpp"
 
-class BucketTabela {
+class CsrTabela {
 public:
     // BUILD: preuredi redovi[0..n-1] po bucketima. Vektori se ponovo koriste, pa se
     // memorija zauzima samo kad particija naraste preko najvece dosad.
-    // pomak: isto kao u NizTabela, u radix joinu pomak = B (vidi niz_tabela.hpp).
+    // pomak: isto kao u LanacTabela, u radix joinu pomak = B (vidi lanac_tabela.hpp).
     void napravi(const Red* redovi, size_t n, int pomak) {
         _pomak = pomak;
 
-        // broj bucketa: najmanji stepen dvojke >= n (kao u NizTabela)
+        // broj bucketa: najmanji stepen dvojke >= n (kao u LanacTabela)
         size_t broj_bucketa = 1;
         while (broj_bucketa < n) broj_bucketa *= 2;
         _maska = broj_bucketa - 1;
@@ -67,7 +68,7 @@ public:
     }
 
 private:
-    // Isti hash kao u NizTabela.
+    // Isti hash kao u LanacTabela.
     size_t bucket(uint32_t key) const {
         return (uint64_t)(key >> _pomak) * 2654435761ull & _maska;
     }

@@ -1,6 +1,6 @@
-// Poredjenje cetiri verzije hash joina na istim podacima: naivni, radix sa tabelom
-// od cvorova, radix sa tabelom od nizova indeksa ("radix niz") i radix sa tabelom
-// u kojoj je svaki bucket uzastopan komad niza ("radix bucket").
+// Poredjenje cetiri verzije hash joina na istim podacima: naivni i tri radix verzije,
+// koje se razlikuju samo po rasporedu hash tabele: cvorovi ("radix cvorovi"), lanac
+// kroz nizove indeksa ("radix lanac") i bucketi kao uzastopni komadi niza ("radix CSR").
 // Radix verzije se mjere za vise vrijednosti B (broj radix bitova, 2^B particija).
 //
 // Prevodjenje i pokretanje: vidi README.md.
@@ -24,7 +24,7 @@ struct Faze {
 Faze mjeri_naivni(const std::vector<Red>& R, const std::vector<Red>& S, const Rezultat& ocekivano) {
     std::vector<Mjerenje> m1, m2;
     for (int i = 0; i < ZAGRIJAVANJA + PONAVLJANJA; ++i) {
-        HashTabela tabela;
+        CvorTabela tabela;
         Rezultat rez;
         Mjerenje a = mjeri([&] { tabela = build(R); });
         Mjerenje b = mjeri([&] { rez = probe(tabela, S); });
@@ -38,9 +38,8 @@ Faze mjeri_naivni(const std::vector<Red>& R, const std::vector<Red>& S, const Re
 }
 
 // Radix: faza 1 = particionisanje R i S, faza 2 = join po particijama.
-// join_po_particijama je join_particija (cvorovi), join_particija_niz (nizovi) ili
-// join_particija_bucket (bucketi kao komadi niza), pa sve radix verzije koriste
-// isti kod za mjerenje.
+// join_po_particijama je join_particija_cvorovi, join_particija_lanac ili
+// join_particija_csr, pa sve radix verzije koriste isti kod za mjerenje.
 template <class JoinPoParticijama>
 Faze mjeri_radix(const std::vector<Red>& R, const std::vector<Red>& S, int B, const Rezultat& ocekivano,
                  JoinPoParticijama join_po_particijama) {
@@ -85,10 +84,10 @@ int main(int argc, char** argv) {
                 N_R, N_S, (unsigned long long)ocekivano.broj_redova);
     std::printf("%d zagrijavanje + %d mjerenja, vremena su medijane u ms\n\n",
                 ZAGRIJAVANJA, PONAVLJANJA);
-    std::printf("naivni:       jedna hash tabela od cvorova za cijelu R (hash_tabela.hpp)\n");
-    std::printf("radix:        hash tabela od cvorova po particiji (hash_tabela.hpp)\n");
-    std::printf("radix niz:    hash tabela od nizova indeksa, jedna za sve particije (niz_tabela.hpp)\n");
-    std::printf("radix bucket: bucket je uzastopan komad niza, bez lanca (bucket_tabela.hpp)\n");
+    std::printf("naivni:         jedna hash tabela od cvorova za cijelu R (cvor_tabela.hpp)\n");
+    std::printf("radix cvorovi:  bucket je lista cvorova, nova tabela za svaku particiju (cvor_tabela.hpp)\n");
+    std::printf("radix lanac:    bucket je lanac kroz nizove indeksa, jedna tabela (lanac_tabela.hpp)\n");
+    std::printf("radix CSR:      bucket je uzastopan komad niza, bez lanca (csr_tabela.hpp)\n");
     std::printf("faza 1: naivni = build,  radix verzije = particionisanje R i S\n");
     std::printf("faza 2: naivni = probe,  radix verzije = join po particijama (build + probe)\n");
     std::printf("L1D/red, LLC/red: cache promasaji obje faze po redu (R + S)\n\n");
@@ -103,26 +102,26 @@ int main(int argc, char** argv) {
     ispisi_red("naivni", naivni, naivno_ms, redova);
 
     for (int B : RADIX_BITOVI) {
-        Faze radix = mjeri_radix(R, S, B, ocekivano, join_particija);
-        if (!radix.ok) { std::printf("GRESKA: radix join (B = %d) vratio pogresan rezultat\n", B); return 1; }
+        Faze radix = mjeri_radix(R, S, B, ocekivano, join_particija_cvorovi);
+        if (!radix.ok) { std::printf("GRESKA: radix cvorovi join (B = %d) vratio pogresan rezultat\n", B); return 1; }
         char naziv[32];
-        std::snprintf(naziv, sizeof(naziv), "radix B=%d", B);
+        std::snprintf(naziv, sizeof(naziv), "radix cvorovi B=%d", B);
         ispisi_red(naziv, radix, naivno_ms, redova);
     }
 
     for (int B : RADIX_BITOVI) {
-        Faze radix = mjeri_radix(R, S, B, ocekivano, join_particija_niz);
-        if (!radix.ok) { std::printf("GRESKA: radix niz join (B = %d) vratio pogresan rezultat\n", B); return 1; }
+        Faze radix = mjeri_radix(R, S, B, ocekivano, join_particija_lanac);
+        if (!radix.ok) { std::printf("GRESKA: radix lanac join (B = %d) vratio pogresan rezultat\n", B); return 1; }
         char naziv[32];
-        std::snprintf(naziv, sizeof(naziv), "radix niz B=%d", B);
+        std::snprintf(naziv, sizeof(naziv), "radix lanac B=%d", B);
         ispisi_red(naziv, radix, naivno_ms, redova);
     }
 
     for (int B : RADIX_BITOVI) {
-        Faze radix = mjeri_radix(R, S, B, ocekivano, join_particija_bucket);
-        if (!radix.ok) { std::printf("GRESKA: radix bucket join (B = %d) vratio pogresan rezultat\n", B); return 1; }
+        Faze radix = mjeri_radix(R, S, B, ocekivano, join_particija_csr);
+        if (!radix.ok) { std::printf("GRESKA: radix CSR join (B = %d) vratio pogresan rezultat\n", B); return 1; }
         char naziv[32];
-        std::snprintf(naziv, sizeof(naziv), "radix bucket B=%d", B);
+        std::snprintf(naziv, sizeof(naziv), "radix CSR B=%d", B);
         ispisi_red(naziv, radix, naivno_ms, redova);
     }
     return 0;

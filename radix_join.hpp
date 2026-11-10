@@ -11,9 +11,9 @@
 #pragma once
 
 #include "common.hpp"
-#include "hash_tabela.hpp"
-#include "niz_tabela.hpp"
-#include "bucket_tabela.hpp"
+#include "cvor_tabela.hpp"
+#include "lanac_tabela.hpp"
+#include "csr_tabela.hpp"
 
 // Tabela podijeljena na particije: redovi particije p su
 // redovi[pocetak[p]] .. redovi[pocetak[p + 1] - 1].
@@ -54,15 +54,15 @@ inline Particije particionisi(const std::vector<Red>& ulaz, int B) {
 // Join po particijama: za svaku particiju obican hash join (build + probe),
 // sa istom hash tabelom kao naivni join, samo mnogo manjom.
 // B = broj radix bitova kojim su R i S particionisani.
-inline Rezultat join_particija(const Particije& R, const Particije& S, int B) {
+inline Rezultat join_particija_cvorovi(const Particije& R, const Particije& S, int B) {
     Rezultat rez;
     const size_t P = R.pocetak.size() - 1;
 
     for (size_t p = 0; p < P; ++p) {
         // BUILD particije R_p. Svi kljucevi u particiji imaju istih donjih B bitova,
         // pa hash mora te bitove preskociti (pomak = B), inace bi svi kljucevi
-        // particije pali u mali broj bucketa (vidi komentar u hash_tabela.hpp).
-        HashTabela tabela(R.redovi.data() + R.pocetak[p], R.pocetak[p + 1] - R.pocetak[p], B);
+        // particije pali u mali broj bucketa (vidi komentar u cvor_tabela.hpp).
+        CvorTabela tabela(R.redovi.data() + R.pocetak[p], R.pocetak[p + 1] - R.pocetak[p], B);
 
         // PROBE particijom S_p: svaki par sa istim kljucem je red rezultata
         for (size_t i = S.pocetak[p]; i < S.pocetak[p + 1]; ++i) {
@@ -76,20 +76,20 @@ inline Rezultat join_particija(const Particije& R, const Particije& S, int B) {
     return rez;
 }
 
-inline Rezultat radix_join(const std::vector<Red>& R, const std::vector<Red>& S, int B) {
-    return join_particija(particionisi(R, B), particionisi(S, B), B);
+inline Rezultat radix_join_cvorovi(const std::vector<Red>& R, const std::vector<Red>& S, int B) {
+    return join_particija_cvorovi(particionisi(R, B), particionisi(S, B), B);
 }
 
-// Isto kao join_particija, ali sa NizTabela (niz_tabela.hpp) umjesto tabele od cvorova.
+// Isto kao join_particija_cvorovi, ali sa LanacTabela (lanac_tabela.hpp) umjesto tabele od cvorova.
 // Jedna tabela se koristi za sve particije: napravi() samo prepise njene nizove,
 // pa nema alokacije ni oslobadjanja po particiji.
-inline Rezultat join_particija_niz(const Particije& R, const Particije& S, int B) {
+inline Rezultat join_particija_lanac(const Particije& R, const Particije& S, int B) {
     Rezultat rez;
     const size_t P = R.pocetak.size() - 1;
-    NizTabela tabela;
+    LanacTabela tabela;
 
     for (size_t p = 0; p < P; ++p) {
-        // BUILD particije R_p, sa pomak = B iz istog razloga kao u join_particija
+        // BUILD particije R_p, sa pomak = B iz istog razloga kao u join_particija_cvorovi
         tabela.napravi(R.redovi.data() + R.pocetak[p], R.pocetak[p + 1] - R.pocetak[p], B);
 
         // PROBE particijom S_p: svaki par sa istim kljucem je red rezultata
@@ -104,19 +104,19 @@ inline Rezultat join_particija_niz(const Particije& R, const Particije& S, int B
     return rez;
 }
 
-inline Rezultat radix_join_niz(const std::vector<Red>& R, const std::vector<Red>& S, int B) {
-    return join_particija_niz(particionisi(R, B), particionisi(S, B), B);
+inline Rezultat radix_join_lanac(const std::vector<Red>& R, const std::vector<Red>& S, int B) {
+    return join_particija_lanac(particionisi(R, B), particionisi(S, B), B);
 }
 
-// Isto kao join_particija_niz, ali sa BucketTabela (bucket_tabela.hpp): bucket nije
+// Isto kao join_particija_lanac, ali sa CsrTabela (csr_tabela.hpp): bucket nije
 // lanac, nego uzastopan komad niza. Jedna tabela se koristi za sve particije.
-inline Rezultat join_particija_bucket(const Particije& R, const Particije& S, int B) {
+inline Rezultat join_particija_csr(const Particije& R, const Particije& S, int B) {
     Rezultat rez;
     const size_t P = R.pocetak.size() - 1;
-    BucketTabela tabela;
+    CsrTabela tabela;
 
     for (size_t p = 0; p < P; ++p) {
-        // BUILD particije R_p, sa pomak = B iz istog razloga kao u join_particija
+        // BUILD particije R_p, sa pomak = B iz istog razloga kao u join_particija_cvorovi
         tabela.napravi(R.redovi.data() + R.pocetak[p], R.pocetak[p + 1] - R.pocetak[p], B);
 
         // PROBE particijom S_p: svaki par sa istim kljucem je red rezultata
@@ -131,6 +131,6 @@ inline Rezultat join_particija_bucket(const Particije& R, const Particije& S, in
     return rez;
 }
 
-inline Rezultat radix_join_bucket(const std::vector<Red>& R, const std::vector<Red>& S, int B) {
-    return join_particija_bucket(particionisi(R, B), particionisi(S, B), B);
+inline Rezultat radix_join_csr(const std::vector<Red>& R, const std::vector<Red>& S, int B) {
+    return join_particija_csr(particionisi(R, B), particionisi(S, B), B);
 }

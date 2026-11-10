@@ -1,4 +1,5 @@
-// Hash tabela od nizova indeksa, za build stranu radix joina (redovi jedne particije R).
+// LanacTabela: hash tabela u kojoj je bucket lanac kroz nizove indeksa, za build
+// stranu radix joina (redovi jedne particije R). Koristi je verzija "radix lanac".
 //
 // Redovi se ne kopiraju: tabela pamti pokazivac na niz redova particije i indekse u njega.
 // Svaki bucket je lanac redova povezan indeksima:
@@ -6,7 +7,7 @@
 //   _prvi[b]     = indeks prvog reda u bucketu b (ili PRAZNO)
 //   _sljedeci[i] = indeks sljedeceg reda u istom bucketu kao red i (ili PRAZNO)
 //
-// U odnosu na HashTabela (hash_tabela.hpp) ova verzija uklanja slabosti:
+// U odnosu na CvorTabela (cvor_tabela.hpp) ova verzija uklanja slabosti:
 //   [1] nema cvorova alociranih sa new: cijela tabela su dva uzastopna niza
 //   [2] red se ne kopira i nema pokazivaca po redu: 4 B (indeks) po redu + 4 B po bucketu
 //   [3] broj bucketa je stepen dvojke, pa se bucket racuna sa & maskom, ne sa %
@@ -16,7 +17,7 @@
 //   [4] lanci: broj bucketa je samo >= n (oko jedan red po bucketu)
 //   [5] probe obilazi cijeli lanac s grananjem (ne staje na prvom pogotku)
 //
-// Napomena o hashu: hash je isti kao u HashTabela, (key >> pomak) * 2654435761,
+// Napomena o hashu: hash je isti kao u CvorTabela, (key >> pomak) * 2654435761,
 // samo sa & maska umjesto %. & maska uzima DONJE bitove proizvoda, a oni zavise
 // samo od donjih bitova kljuca (mnozenje prenosi bitove samo prema gore).
 // Za nase guste kljuceve to je cak savrsena raspodjela, ali kljucevi koji se
@@ -26,7 +27,7 @@
 
 #include "common.hpp"
 
-class NizTabela {
+class LanacTabela {
 public:
     // BUILD: ubaci redovi[0..n-1] u tabelu. Niz redova mora postojati dok se tabela koristi.
     // Vektori se ponovo koriste (assign/resize), pa se memorija zauzima samo kad
@@ -70,7 +71,7 @@ public:
 private:
     static constexpr uint32_t PRAZNO = UINT32_MAX;
 
-    // Isti multiplikativni hash kao u HashTabela, ali & maska umjesto % [3].
+    // Isti multiplikativni hash kao u CvorTabela, ali & maska umjesto % [3].
     size_t bucket(uint32_t key) const {
         return (uint64_t)(key >> _pomak) * 2654435761ull & _maska;
     }

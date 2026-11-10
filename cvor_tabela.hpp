@@ -1,4 +1,5 @@
-// Naivna lancana hash tabela sa cvorovima, za build stranu joina (redovi iz R).
+// CvorTabela: naivna lancana hash tabela sa cvorovima, za build stranu joina (redovi iz R).
+// Koriste je verzije "naivni" i "radix cvorovi".
 //
 // Ovo je NAMJERNO spora referentna verzija, koja ostavlja prostor za optimizaciju.
 // Namjerne slabosti (optimizovati ih jednu po jednu):
@@ -17,9 +18,9 @@
 
 #include "common.hpp"
 
-class HashTabela {
+class CvorTabela {
 public:
-    HashTabela() = default;
+    CvorTabela() = default;
 
     // BUILD: ubaci redove[0..n-1] u tabelu. Svaki red se kopira u novi cvor [1][2].
     //
@@ -29,7 +30,7 @@ public:
     // particije bi bili oblika p + k * 2^B, pa bi (kljuc * c) % broj_bucketa
     // pao u mali broj bucketa: lanci bi bili ogromni i join bi se zaglavio.
     // Zato radix join pravi tabelu sa pomak = B, pa hash vidi samo k.
-    HashTabela(const Red* redovi, size_t n, int pomak = 0)
+    CvorTabela(const Red* redovi, size_t n, int pomak = 0)
         : _bucketi(n > 0 ? n : 1, nullptr), _pomak(pomak) {  // broj bucketa = n [4]
         for (size_t i = 0; i < n; ++i) {
             Cvor*& prvi = _bucketi[bucket(redovi[i].key)];
@@ -37,18 +38,18 @@ public:
         }
     }
 
-    ~HashTabela() { oslobodi(); }
+    ~CvorTabela() { oslobodi(); }
 
     // Kopiranje je zabranjeno (cvorovi bi se oslobodili dvaput), premjestanje je dozvoljeno.
-    HashTabela(const HashTabela&) = delete;
-    HashTabela& operator=(const HashTabela&) = delete;
+    CvorTabela(const CvorTabela&) = delete;
+    CvorTabela& operator=(const CvorTabela&) = delete;
 
-    HashTabela(HashTabela&& o) noexcept
+    CvorTabela(CvorTabela&& o) noexcept
         : _bucketi(std::move(o._bucketi)), _pomak(o._pomak) {
         o._bucketi.clear();  // premjestena tabela je prazna
     }
 
-    HashTabela& operator=(HashTabela&& o) noexcept {
+    CvorTabela& operator=(CvorTabela&& o) noexcept {
         if (this != &o) {
             oslobodi();  // prvo oslobodi svoje postojece cvorove
             _bucketi = std::move(o._bucketi);
