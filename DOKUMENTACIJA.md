@@ -1,6 +1,6 @@
-# Hash join: četiri verzije
+# Hash join: pet verzija
 
-Kratak pregled četiri implementacije hash joina `R ⋈ S` po ključu (`R.key = S.key`), sa ključnim razlikama i rezultatima mjerenja. Uputstvo za pokretanje je u [README.md](README.md).
+Kratak pregled pet implementacija hash joina `R ⋈ S` po ključu (`R.key = S.key`), sa ključnim razlikama i rezultatima mjerenja. Uputstvo za pokretanje je u [README.md](README.md).
 
 ## Zadatak
 
@@ -13,7 +13,7 @@ Hash join ima dvije faze:
 - **build:** od R napravi hash tabelu;
 - **probe:** za svaki red iz S potraži ključ u tabeli.
 
-## Četiri verzije ukratko
+## Pet verzija ukratko
 
 | | Particionisanje | Raspored bucketa | Broj tabela |
 |---|---|---|---|
@@ -21,8 +21,9 @@ Hash join ima dvije faze:
 | **2. radix čvorovi** | da, 2^B particija | lista čvorova (`CvorTabela`) | nova za svaku particiju |
 | **3. radix lanac** | da, 2^B particija | lanac kroz nizove indeksa (`LanacTabela`) | jedna, ponovo korištena |
 | **4. radix CSR** | da, 2^B particija | uzastopan komad jednog niza (`CsrTabela`) | jedna, ponovo korištena |
+| **5. radix lanac pool** | da, u bafere zauzete unaprijed | lanac kroz nizove indeksa (`LanacTabela`) | jedna, ponovo korištena |
 
-Naziv svake verzije je način joina + raspored hash tabele. Verzije 2–4 imaju isto particionisanje i razlikuju se samo po tome kako su redovi jednog bucketa smješteni u memoriji. Svaka sljedeća verzija mijenja jednu stvar, pa se u mjerenju vidi efekat svake promjene posebno.
+Naziv svake verzije je način joina + raspored hash tabele. Verzije 2–4 imaju isto particionisanje i razlikuju se samo po tome kako su redovi jednog bucketa smješteni u memoriji. Verzija 5 je verzija 3 kojoj se mijenja samo memorija za particije. Svaka sljedeća verzija mijenja jednu stvar, pa se u mjerenju vidi efekat svake promjene posebno.
 
 ## 1. Naivni hash join
 
@@ -102,45 +103,67 @@ Naziv CSR (*compressed sparse row*) dolazi od istog rasporeda kod rijetkih matri
 
 **Cijena:** build mora premjestiti svaki red na njegovo mjesto u bucketu, umjesto da upiše samo indeks.
 
+## 5. Radix lanac pool (memorija za particije zauzeta unaprijed)
+
+Fajlovi: [`radix_join.hpp`](radix_join.hpp) (`particionisi_u`), [`main.cpp`](main.cpp) (`mjeri_radix_pool`)
+
+Nakon verzije 3 join po particijama traje ~30% vremena, a **particionisanje ~70%**. Polovina particionisanja pri tome nije sam posao, nego traženje memorije. Svako pokretanje traži ~8 B po redu nove memorije za particionisane R i S (~88 MB za 1 M / 10 M). Kernel pri prvom upisu mapira i nulira svaku stranicu od 4 KB (page fault).
+
+Verzija 5 zato zauzme bafere za particije **jednom, prije mjerenja**, a svako pokretanje samo prepiše već mapiranu memoriju. Tako rade i baze: imaju memorijski pool i ne traže memoriju od operativnog sistema za svaki upit.
+
+```
+verzije 2–4:  svako pokretanje   particionisi(R, B)        -> nova memorija, page faultovi
+verzija 5:    jednom, unaprijed  Rp.redovi.resize(N_R) ...
+              svako pokretanje   particionisi_u(R, B, Rp)  -> prepisuje postojeću memoriju
+```
+
+**Razlika prema verziji 3:** hash tabela i join po particijama su isti; mijenja se samo gdje particionisanje piše. `particionisi()` je postala omotač oko `particionisi_u()`, pa je logika particionisanja zajednička za sve radix verzije.
+
+**Napomena za poređenje:** verzija 5 ne plaća zauzimanje memorije, a ostale ga plaćaju. To je ista implementacija algoritma, samo sa memorijom zauzetom izvan mjerenja.
+
 ## Pregled slabosti po verzijama
 
-| Slabost | naivni | radix čvorovi | radix lanac | radix CSR |
-|---|---|---|---|---|
-| [1] čvorovi sa `new` | ima | ima | – | – |
-| [2] kopija reda + pokazivač | ima | ima | – | djelimično (kopija, bez pokazivača) |
-| [3] `%` umjesto `&` | ima | ima | – | – |
-| [4] broj bucketa = n | ima | ima | ima | ima |
-| [5] obilazak lanca | ima | ima | ima | – |
-| [6] nova tabela po particiji | (jedna tabela) | ima | – | – |
+| Slabost | naivni | radix čvorovi | radix lanac | radix CSR | radix lanac pool |
+|---|---|---|---|---|---|
+| [1] čvorovi sa `new` | ima | ima | – | – | – |
+| [2] kopija reda + pokazivač | ima | ima | – | djelimično (kopija, bez pokazivača) | – |
+| [3] `%` umjesto `&` | ima | ima | – | – | – |
+| [4] broj bucketa = n | ima | ima | ima | ima | ima |
+| [5] obilazak lanca | ima | ima | ima | – | ima |
+| [6] nova tabela po particiji | (jedna tabela) | ima | – | – | – |
+| nova memorija za particije u svakom pokretanju | (nema particija) | ima | ima | ima | – |
 
 ## Rezultati
 
-i7-11800H (L1d 48 KB i L2 1,25 MB po jezgru, L3 24 MB), WSL2, jedna nit, medijana 10 mjerenja. Prikazana je najbolja vrijednost B za svaku radix verziju. Faza 1 je kod naivnog build, a kod radix verzija particionisanje R i S. Faza 2 je kod naivnog probe, a kod radix verzija join po particijama.
+i7-11800H (L1d 48 KB i L2 1,25 MB po jezgru, L3 24 MB), WSL2, jedna nit, medijana 10 mjerenja. Sve brojke su iz jednog pokretanja programa. Prikazana je najbolja vrijednost B za svaku radix verziju. Faza 1 je kod naivnog build, a kod radix verzija particionisanje R i S. Faza 2 je kod naivnog probe, a kod radix verzija join po particijama.
 
 **R = 1 M, S = 10 M**
 
 | verzija | faza 1 | faza 2 | ukupno | ubrzanje | LLC promašaji/red |
 |---|---|---|---|---|---|
-| naivni | 22,6 ms | 141,7 ms | 164,3 ms | 1,00× | 1,17 |
-| radix čvorovi (B=6) | 42,0 ms | 51,1 ms | 93,1 ms | 1,76× | 0,19 |
-| radix lanac (B=6) | 42,1 ms | 18,4 ms | 60,6 ms | 2,71× | 0,19 |
-| radix CSR (B=6) | 42,6 ms | 25,1 ms | 67,7 ms | 2,43× | 0,20 |
+| naivni | 39,0 ms | 337,8 ms | 376,8 ms | 1,00× | 1,23 |
+| radix čvorovi (B=6) | 65,0 ms | 81,3 ms | 146,3 ms | 2,58× | 0,20 |
+| radix lanac (B=6) | 62,2 ms | 26,3 ms | 88,5 ms | 4,26× | 0,21 |
+| radix CSR (B=6) | 60,5 ms | 35,6 ms | 96,1 ms | 3,92× | 0,21 |
+| radix lanac pool (B=6) | 32,4 ms | 28,1 ms | 60,4 ms | 6,23× | 0,19 |
 
 **R = 4 M, S = 16 M**
 
 | verzija | faza 1 | faza 2 | ukupno | ubrzanje | LLC promašaji/red |
 |---|---|---|---|---|---|
-| naivni | 184,0 ms | 351,4 ms | 535,3 ms | 1,00× | 2,20 |
-| radix čvorovi (B=8) | 95,6 ms | 146,8 ms | 242,4 ms | 2,21× | 0,29 |
-| radix lanac (B=6) | 73,6 ms | 41,0 ms | 114,6 ms | 4,67× | 0,21 |
-| radix CSR (B=6) | 73,0 ms | 60,3 ms | 133,3 ms | 4,02× | 0,22 |
+| naivni | 323,0 ms | 1034,4 ms | 1357,4 ms | 1,00× | 2,31 |
+| radix čvorovi (B=8) | 154,5 ms | 228,5 ms | 383,0 ms | 3,54× | 0,29 |
+| radix lanac (B=6) | 125,4 ms | 71,9 ms | 197,3 ms | 6,88× | 0,21 |
+| radix CSR (B=6) | 110,0 ms | 95,8 ms | 205,8 ms | 6,60× | 0,22 |
+| radix lanac pool (B=6) | 55,1 ms | 67,6 ms | 122,6 ms | 11,07× | 0,19 |
 
-Mašina je između pokretanja dosta varirala, pa omjere treba gledati unutar iste tabele.
+Mašina je između pokretanja programa dosta varirala (naivni 1 M: od ~160 do ~380 ms), pa apsolutna vremena iz različitih pokretanja nisu uporediva. Omjere treba gledati unutar iste tabele.
 
 ## Ključni zaključci
 
-1. **Particionisanje rješava keš problem.** LLC promašaji padaju sa 1,2–2,2 na ~0,2 po redu, jer tabela particije stane u keš. Radix je 1,8–2,2× brži od naivnog i sa istom, sporom tabelom.
-2. **Struktura hash tabele je sljedeće usko grlo.** Nizovi umjesto čvorova (verzija 3) ubrzavaju join po particijama 2,8–3,6×. Najbolja verzija ukupno je **radix lanac**: 2,7× na 1 M i 4,7× na 4 M prema naivnom.
+1. **Particionisanje rješava keš problem.** LLC promašaji padaju sa 1,2–2,3 na ~0,2 po redu, jer tabela particije stane u keš. Radix čvorovi su 2,6–3,5× brži od naivnog, i to sa istom, sporom tabelom.
+2. **Struktura hash tabele je sljedeće usko grlo.** Nizovi umjesto čvorova (verzija 3) ubrzavaju join po particijama 3,1× na 1 M (81 → 26 ms) i 3,2× na 4 M (229 → 72 ms).
 3. **Popravka slabosti nije automatski ubrzanje.** Radix CSR ima 15–20% brži probe, ali 4–5× skuplji build, pa ukupno nije brži od radix lanac. Na našim podacima su lanci savršeni (tačno jedan red po probe-u), pa uklanjanje lanca malo donosi. Isplatilo bi se uz duže lance, npr. sa duplikatima ključeva u R.
-4. **Broj particija je kompromis.** Više particija daje manje tabele, ali skuplje particionisanje, jer se istovremeno piše na 2^B mjesta. Najbolje je B = 6–8.
-5. **Slabost [4] se na ovim podacima ne vidi.** Gusti ključevi daju savršenu raspodjelu po bucketima. Efekat bi se vidio tek sa slučajnim ključevima.
+4. **Kad se jedna faza ubrza, druga postaje usko grlo.** Nakon verzije 3 particionisanje je ~70% vremena, a pola od toga su page faultovi zbog nove memorije. Sa memorijom zauzetom unaprijed (verzija 5) particionisanje je ~2× brže, pa je **radix lanac pool najbrža verzija**: 6,2× na 1 M i 11,1× na 4 M prema naivnom.
+5. **Broj particija je kompromis.** Više particija daje manje tabele, ali skuplje particionisanje, jer se istovremeno piše na 2^B mjesta. Najbolje je B = 6–8.
+6. **Slabost [4] se na ovim podacima ne vidi.** Gusti ključevi daju savršenu raspodjelu po bucketima. Efekat bi se vidio tek sa slučajnim ključevima.

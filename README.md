@@ -1,16 +1,16 @@
 # radix-hash-join
 
-Poređenje četiri verzije hash joina dvije tabele `R ⋈ S` po ključu. Program izmjeri sve četiri na istim podacima, radix verzije za više vrijednosti broja bitova B, i ispiše tabelu sa vremenima i cache promašajima. Isti join se može pokrenuti i u [DuckDB](https://duckdb.org)-u kao industrijskoj referenci.
+Poređenje pet verzija hash joina dvije tabele `R ⋈ S` po ključu. Program izmjeri svih pet na istim podacima, radix verzije za više vrijednosti broja bitova B, i ispiše tabelu sa vremenima i cache promašajima. Isti join se može pokrenuti i u [DuckDB](https://duckdb.org)-u kao industrijskoj referenci.
 
 ## Sadržaj
 
-- [Četiri verzije](#četiri-verzije) · detaljnije u [DOKUMENTACIJA.md](DOKUMENTACIJA.md)
+- [Pet verzija](#pet-verzija) · detaljnije u [DOKUMENTACIJA.md](DOKUMENTACIJA.md)
 - Pokretanje: [Linux](#linux) · [Windows](#windows) · [macOS](#macos-samo-vrijeme)
 - [Poređenje sa DuckDB-om](#poređenje-sa-duckdb-om)
 
-## Četiri verzije
+## Pet verzija
 
-Naziv svake verzije je način joina + raspored hash tabele. Tri radix verzije imaju isto particionisanje i razlikuju se samo po tome kako su redovi jednog bucketa smješteni u memoriji.
+Naziv svake verzije je način joina + raspored hash tabele. Radix čvorovi, lanac i CSR imaju isto particionisanje i razlikuju se samo po tome kako su redovi jednog bucketa smješteni u memoriji. Radix lanac pool je radix lanac kojem se mijenja samo memorija za particije.
 
 | Verzija | Šta radi | Hash tabela (raspored bucketa) |
 |---|---|---|
@@ -18,18 +18,21 @@ Naziv svake verzije je način joina + raspored hash tabele. Tri radix verzije im
 | **radix čvorovi** | R i S se podijele na 2^B particija po donjih B bitova ključa, pa hash join po particijama | ista tabela od čvorova, nova za svaku particiju |
 | **radix lanac** | isto particionisanje | lanac kroz nizove indeksa ([`lanac_tabela.hpp`](lanac_tabela.hpp)), jedna tabela za sve particije |
 | **radix CSR** | isto particionisanje | uzastopan komad jednog niza, bez lanca ([`csr_tabela.hpp`](csr_tabela.hpp)), jedna tabela za sve particije |
+| **radix lanac pool** | isto particionisanje, ali u bafere zauzete jednom, unaprijed (kao memorijski pool u bazi) | ista kao radix lanac |
 
 Tabela od čvorova je namjerno spora referentna verzija: na vrhu [`cvor_tabela.hpp`](cvor_tabela.hpp) su numerisane njene slabosti [1]–[6]. Radix lanac uklanja [1], [2], [3] i [6], a radix CSR uklanja i [5] (obilazak lanca). [4] ostaje u svim verzijama.
 
 Na našim podacima (gusti ključevi, savršeni lanci od jednog reda) radix CSR ima ~15–20% brži probe, ali 4–5× skuplji build (redovi se premještaju po bucketima), pa ukupno nije brži od radix lanac.
 
+Radix lanac pool ne traži novu memoriju od operativnog sistema u svakom pokretanju, pa ne plaća page faultove. Particionisanje je zato ~2× brže. To je ista implementacija algoritma, samo sa memorijom zauzetom izvan mjerenja.
+
 ## Fajlovi
 
 | Fajl | Sadržaj |
 |---|---|
-| [`main.cpp`](main.cpp) | mjeri sve četiri verzije (radix za B = 2, 4, 6, 8) i ispisuje tabelu |
+| [`main.cpp`](main.cpp) | mjeri svih pet verzija (radix za B = 2, 4, 6, 8) i ispisuje tabelu |
 | [`hash_join.hpp`](hash_join.hpp) | naivni hash join: build (hash tabela od cijele R) + probe (svaki red S) |
-| [`radix_join.hpp`](radix_join.hpp) | particionisanje R i S, i join po particijama za sve tri radix verzije (čvorovi, lanac, CSR) |
+| [`radix_join.hpp`](radix_join.hpp) | particionisanje R i S (u novu ili postojeću memoriju), i join po particijama za čvorove, lanac i CSR |
 | [`cvor_tabela.hpp`](cvor_tabela.hpp) | `CvorTabela`: lančana hash tabela sa čvorovima, sa spiskom namjernih slabosti za optimizaciju |
 | [`lanac_tabela.hpp`](lanac_tabela.hpp) | `LanacTabela`: bucket je lanac kroz nizove indeksa, bez čvorova i bez alokacije po particiji |
 | [`csr_tabela.hpp`](csr_tabela.hpp) | `CsrTabela`: bucket je uzastopan komad niza (histogram → prefiksni zbir → raspodjela) |

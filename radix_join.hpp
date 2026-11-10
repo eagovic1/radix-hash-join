@@ -26,8 +26,11 @@ struct Particije {
 // (Ovdje su kljucevi vec ravnomjerno rasporedjeni; u praksi bi se uzeli bitovi hasha kljuca.)
 inline uint32_t particija(uint32_t key, uint32_t maska) { return key & maska; }
 
-// Podjela tabele na P = 2^B particija u tri koraka (kao counting sort):
-inline Particije particionisi(const std::vector<Red>& ulaz, int B) {
+// Podjela tabele na P = 2^B particija u tri koraka (kao counting sort), upisom
+// u postojeci izlaz. Ako izlaz.redovi vec ima ulaz.size() elemenata (npr. iz
+// prethodnog poziva), resize ne trazi novu memoriju, pa nema page faultova:
+// stranice su vec mapirane, i samo se prepisuju.
+inline void particionisi_u(const std::vector<Red>& ulaz, int B, Particije& izlaz) {
     const size_t P = size_t(1) << B;
     const uint32_t maska = (uint32_t)P - 1;
 
@@ -37,7 +40,6 @@ inline Particije particionisi(const std::vector<Red>& ulaz, int B) {
         broj[particija(r.key, maska)]++;
 
     // 2) prefiksni zbir: gdje u izlazu pocinje svaka particija
-    Particije izlaz;
     izlaz.pocetak.assign(P + 1, 0);
     for (size_t p = 0; p < P; ++p)
         izlaz.pocetak[p + 1] = izlaz.pocetak[p] + broj[p];
@@ -47,7 +49,13 @@ inline Particije particionisi(const std::vector<Red>& ulaz, int B) {
     std::vector<size_t> pozicija(izlaz.pocetak.begin(), izlaz.pocetak.end() - 1);
     for (const Red& r : ulaz)
         izlaz.redovi[pozicija[particija(r.key, maska)]++] = r;
+}
 
+// Isto, ali u novi izlaz: svaki poziv trazi novu memoriju od operativnog sistema
+// (~8 B po redu), pa kernel pri prvom upisu mapira i nulira svaku stranicu.
+inline Particije particionisi(const std::vector<Red>& ulaz, int B) {
+    Particije izlaz;
+    particionisi_u(ulaz, B, izlaz);
     return izlaz;
 }
 
