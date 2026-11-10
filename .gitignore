@@ -2,3 +2,4 @@ context/
 join
 join.exe
 *.obj
+.venv/
