@@ -1,20 +1,32 @@
 # radix-hash-join
 
-Poređenje naivnog i radix hash joina dvije tabele `R ⋈ S` po ključu. Program izmjeri oba joina na istim podacima, radix join za više vrijednosti broja bitova B, i ispiše tabelu sa vremenima i cache promašajima. Isti join se može pokrenuti i u [DuckDB](https://duckdb.org)-u kao industrijskoj referenci.
+Poređenje tri verzije hash joina dvije tabele `R ⋈ S` po ključu. Program izmjeri sve tri na istim podacima, radix verzije za više vrijednosti broja bitova B, i ispiše tabelu sa vremenima i cache promašajima. Isti join se može pokrenuti i u [DuckDB](https://duckdb.org)-u kao industrijskoj referenci.
 
 ## Sadržaj
 
+- [Tri verzije](#tri-verzije)
 - Pokretanje: [Linux](#linux) · [Windows](#windows) · [macOS](#macos-samo-vrijeme)
 - [Poređenje sa DuckDB-om](#poređenje-sa-duckdb-om)
+
+## Tri verzije
+
+| Verzija | Šta radi | Hash tabela |
+|---|---|---|
+| **naivni** | jedna hash tabela za cijelu R (build), pa probe svakim redom S | lančana tabela od čvorova ([`hash_tabela.hpp`](hash_tabela.hpp)) |
+| **radix** | R i S se podijele na 2^B particija po donjih B bitova ključa, pa hash join po particijama | ista tabela od čvorova, nova za svaku particiju |
+| **radix niz** | isto particionisanje kao radix | tabela od nizova indeksa ([`niz_tabela.hpp`](niz_tabela.hpp)), jedna za sve particije |
+
+Tabela od čvorova je namjerno spora referentna verzija: na vrhu [`hash_tabela.hpp`](hash_tabela.hpp) su numerisane njene slabosti [1]–[6]. Tabela od nizova uklanja [1], [2], [3] i [6], a [4] i [5] namjerno ostaju za sljedeće korake.
 
 ## Fajlovi
 
 | Fajl | Sadržaj |
 |---|---|
-| [`main.cpp`](main.cpp) | mjeri naivni join i radix join za B = 2, 4, …, 16 i ispisuje tabelu |
+| [`main.cpp`](main.cpp) | mjeri sve tri verzije (radix za B = 2, 4, …, 16) i ispisuje tabelu |
 | [`hash_join.hpp`](hash_join.hpp) | naivni hash join: build (hash tabela od cijele R) + probe (svaki red S) |
-| [`radix_join.hpp`](radix_join.hpp) | radix hash join: particionisanje R i S, pa hash join po particijama |
+| [`radix_join.hpp`](radix_join.hpp) | radix hash join (sa čvorovima i sa nizovima): particionisanje R i S, pa hash join po particijama |
 | [`hash_tabela.hpp`](hash_tabela.hpp) | lančana hash tabela sa čvorovima, sa spiskom namjernih slabosti za optimizaciju |
+| [`niz_tabela.hpp`](niz_tabela.hpp) | hash tabela od nizova indeksa, bez čvorova i bez alokacije po particiji |
 | [`common.hpp`](common.hpp) | generisanje podataka, provjera rezultata, mjerenje vremena i cache promašaja |
 | [`duckdb_join.py`](duckdb_join.py) | isti join u DuckDB-u, za poređenje |
 

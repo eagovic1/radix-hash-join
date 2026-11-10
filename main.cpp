@@ -1,5 +1,6 @@
-// Poredjenje naivnog i radix hash joina na istim podacima.
-// Radix join se mjeri za vise vrijednosti B (broj radix bitova, 2^B particija).
+// Poredjenje tri verzije hash joina na istim podacima: naivni, radix sa tabelom
+// od cvorova i radix sa tabelom od nizova indeksa ("radix niz").
+// Radix verzije se mjere za vise vrijednosti B (broj radix bitova, 2^B particija).
 //
 // Prevodjenje i pokretanje: vidi README.md.
 // Cache promasaji se mjere samo na Linuxu (i WSL-u).
@@ -36,13 +37,17 @@ Faze mjeri_naivni(const std::vector<Red>& R, const std::vector<Red>& S, const Re
 }
 
 // Radix: faza 1 = particionisanje R i S, faza 2 = join po particijama.
-Faze mjeri_radix(const std::vector<Red>& R, const std::vector<Red>& S, int B, const Rezultat& ocekivano) {
+// join_po_particijama je join_particija (cvorovi) ili join_particija_niz (nizovi),
+// pa obje radix verzije koriste isti kod za mjerenje.
+template <class JoinPoParticijama>
+Faze mjeri_radix(const std::vector<Red>& R, const std::vector<Red>& S, int B, const Rezultat& ocekivano,
+                 JoinPoParticijama join_po_particijama) {
     std::vector<Mjerenje> m1, m2;
     for (int i = 0; i < ZAGRIJAVANJA + PONAVLJANJA; ++i) {
         Particije Rp, Sp;
         Rezultat rez;
         Mjerenje a = mjeri([&] { Rp = particionisi(R, B); Sp = particionisi(S, B); });
-        Mjerenje b = mjeri([&] { rez = join_particija(Rp, Sp, B); });
+        Mjerenje b = mjeri([&] { rez = join_po_particijama(Rp, Sp, B); });
 
         if (!isti(rez, ocekivano)) return {a, b, false};
         if (i >= ZAGRIJAVANJA) { m1.push_back(a); m2.push_back(b); }
@@ -53,7 +58,7 @@ Faze mjeri_radix(const std::vector<Red>& R, const std::vector<Red>& S, int B, co
 // Jedan red tabele. Brojaci se sabiraju za obje faze i dijele brojem redova (R + S).
 void ispisi_red(const char* naziv, const Faze& f, double naivno_ms, size_t redova) {
     const double ukupno = f.faza1.ms + f.faza2.ms;
-    std::printf("%-12s %9.1f %9.1f %9.1f %8.2fx %9.1f", naziv,
+    std::printf("%-15s %9.1f %9.1f %9.1f %8.2fx %9.1f", naziv,
                 f.faza1.ms, f.faza2.ms, ukupno, naivno_ms / ukupno, redova / ukupno / 1e3);
 
     auto po_redu = [&](long long a, long long b) {
@@ -78,10 +83,13 @@ int main(int argc, char** argv) {
                 N_R, N_S, (unsigned long long)ocekivano.broj_redova);
     std::printf("%d zagrijavanje + %d mjerenja, vremena su medijane u ms\n\n",
                 ZAGRIJAVANJA, PONAVLJANJA);
-    std::printf("faza 1: naivni = build,  radix = particionisanje R i S\n");
-    std::printf("faza 2: naivni = probe,  radix = join po particijama (build + probe)\n");
+    std::printf("naivni:    jedna hash tabela od cvorova za cijelu R (hash_tabela.hpp)\n");
+    std::printf("radix:     hash tabela od cvorova po particiji (hash_tabela.hpp)\n");
+    std::printf("radix niz: hash tabela od nizova indeksa, jedna za sve particije (niz_tabela.hpp)\n");
+    std::printf("faza 1: naivni = build,  radix i radix niz = particionisanje R i S\n");
+    std::printf("faza 2: naivni = probe,  radix i radix niz = join po particijama (build + probe)\n");
     std::printf("L1D/red, LLC/red: cache promasaji obje faze po redu (R + S)\n\n");
-    std::printf("%-12s %9s %9s %9s %9s %9s %9s %9s\n",
+    std::printf("%-15s %9s %9s %9s %9s %9s %9s %9s\n",
                 "verzija", "faza 1", "faza 2", "ukupno", "ubrzanje", "M red/s", "L1D/red", "LLC/red");
 
     const size_t redova = N_R + N_S;
@@ -92,10 +100,18 @@ int main(int argc, char** argv) {
     ispisi_red("naivni", naivni, naivno_ms, redova);
 
     for (int B : RADIX_BITOVI) {
-        Faze radix = mjeri_radix(R, S, B, ocekivano);
+        Faze radix = mjeri_radix(R, S, B, ocekivano, join_particija);
         if (!radix.ok) { std::printf("GRESKA: radix join (B = %d) vratio pogresan rezultat\n", B); return 1; }
         char naziv[32];
         std::snprintf(naziv, sizeof(naziv), "radix B=%d", B);
+        ispisi_red(naziv, radix, naivno_ms, redova);
+    }
+
+    for (int B : RADIX_BITOVI) {
+        Faze radix = mjeri_radix(R, S, B, ocekivano, join_particija_niz);
+        if (!radix.ok) { std::printf("GRESKA: radix niz join (B = %d) vratio pogresan rezultat\n", B); return 1; }
+        char naziv[32];
+        std::snprintf(naziv, sizeof(naziv), "radix niz B=%d", B);
         ispisi_red(naziv, radix, naivno_ms, redova);
     }
     return 0;

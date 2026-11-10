@@ -12,6 +12,7 @@
 
 #include "common.hpp"
 #include "hash_tabela.hpp"
+#include "niz_tabela.hpp"
 
 // Tabela podijeljena na particije: redovi particije p su
 // redovi[pocetak[p]] .. redovi[pocetak[p + 1] - 1].
@@ -76,4 +77,32 @@ inline Rezultat join_particija(const Particije& R, const Particije& S, int B) {
 
 inline Rezultat radix_join(const std::vector<Red>& R, const std::vector<Red>& S, int B) {
     return join_particija(particionisi(R, B), particionisi(S, B), B);
+}
+
+// Isto kao join_particija, ali sa NizTabela (niz_tabela.hpp) umjesto tabele od cvorova.
+// Jedna tabela se koristi za sve particije: napravi() samo prepise njene nizove,
+// pa nema alokacije ni oslobadjanja po particiji.
+inline Rezultat join_particija_niz(const Particije& R, const Particije& S, int B) {
+    Rezultat rez;
+    const size_t P = R.pocetak.size() - 1;
+    NizTabela tabela;
+
+    for (size_t p = 0; p < P; ++p) {
+        // BUILD particije R_p, sa pomak = B iz istog razloga kao u join_particija
+        tabela.napravi(R.redovi.data() + R.pocetak[p], R.pocetak[p + 1] - R.pocetak[p], B);
+
+        // PROBE particijom S_p: svaki par sa istim kljucem je red rezultata
+        for (size_t i = S.pocetak[p]; i < S.pocetak[p + 1]; ++i) {
+            const Red& s = S.redovi[i];
+            tabela.za_svaki(s.key, [&](const Red& r) {
+                rez.broj_redova++;
+                rez.checksum += (uint64_t)r.payload + s.payload;
+            });
+        }
+    }
+    return rez;
+}
+
+inline Rezultat radix_join_niz(const std::vector<Red>& R, const std::vector<Red>& S, int B) {
+    return join_particija_niz(particionisi(R, B), particionisi(S, B), B);
 }
