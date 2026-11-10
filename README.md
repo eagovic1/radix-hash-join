@@ -97,6 +97,8 @@ clang++ -O2 -std=c++17 main.cpp -o join
 
 `duckdb_join.py` izvršava isti join u [DuckDB](https://duckdb.org)-u kao industrijsku referencu: podaci iste raspodjele, ista provjera rezultata, 1 zagrijavanje + 10 mjerenja, i podrazumijevano **1 nit** (fer poređenje sa sekvencijalnim verzijama).
 
+Skript mjeri dva upita: **join upit** i **isti upit bez joina** (samo skeniranje R i S i agregacija). Njihova razlika, **procjena samog joina**, je ono što je najbliže koloni `ukupno` iz `./join`. Za fer poređenje pokreni oba programa jedan za drugim, sa istim veličinama, npr. `./join 4000000 16000000 && python duckdb_join.py 4000000 16000000`.
+
 ```
 python duckdb_join.py [N_R] [N_S] [niti]   # podrazumijevano 1 000 000, 10 000 000, 1
 ```
