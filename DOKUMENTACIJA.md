@@ -119,7 +119,13 @@ verzija 5:    jednom, unaprijed  Rp.redovi.resize(N_R) ...
 
 **Razlika prema verziji 3:** hash tabela i join po particijama su isti; mijenja se samo gdje particionisanje piše. `particionisi()` je postala omotač oko `particionisi_u()`, pa je logika particionisanja zajednička za sve radix verzije.
 
-**Napomena za poređenje:** verzija 5 ne plaća zauzimanje memorije, a ostale ga plaćaju. To je ista implementacija algoritma, samo sa memorijom zauzetom izvan mjerenja.
+**Šta ova verzija mjeri, a šta ne.** Verzija 5 mjeri isti algoritam kao verzija 3, ali bez cijene dobijanja nove memorije od operativnog sistema. Program pokreće join 11 puta (1 zagrijavanje + 10 mjerenja): verzije 2–4 plaćaju page faultove u svakom pokretanju, a verzija 5 jednom, izvan mjerenja.
+
+- **Kad je to stvarno ubrzanje:** kad isti proces izvršava mnogo joinova, kao server baze podataka koji radi satima. Baza ne vraća memoriju sistemu nakon upita, nego je čuva u memorijskom poolu, pa sljedeći upit dobija već mapiranu memoriju. Nije potrebno unaprijed znati koliko će biti joinova; dovoljno je da se memorija ne vraća.
+- **Kad nije:** za jedan, izolovan join. Memoriju za particije program mora jednom dobiti od sistema, pa tada verzija 5 traje isto kao verzija 3.
+- **Šta pokazuje razlika 3 → 5:** koliko košta traženje nove memorije, ~polovinu particionisanja. Za jedan join bi tu pomogle druge tehnike, npr. velike stranice (2 MB umjesto 4 KB, pa ~500× manje page faultova) ili particionisanje bez pune kopije S.
+
+Verzije 2–4 plaćaju page faultove u svakom pokretanju i zbog jednog detalja glibc-a: blok od desetina MB `malloc` dobija posebnim mapiranjem i vraća ga sistemu odmah nakon `free`, pa ga sljedeće pokretanje traži ispočetka.
 
 ## Pregled slabosti po verzijama
 
@@ -164,6 +170,6 @@ Mašina je između pokretanja programa dosta varirala (naivni 1 M: od ~160 do ~3
 1. **Particionisanje rješava keš problem.** LLC promašaji padaju sa 1,2–2,3 na ~0,2 po redu, jer tabela particije stane u keš. Radix čvorovi su 2,6–3,5× brži od naivnog, i to sa istom, sporom tabelom.
 2. **Struktura hash tabele je sljedeće usko grlo.** Nizovi umjesto čvorova (verzija 3) ubrzavaju join po particijama 3,1× na 1 M (81 → 26 ms) i 3,2× na 4 M (229 → 72 ms).
 3. **Popravka slabosti nije automatski ubrzanje.** Radix CSR ima 15–20% brži probe, ali 4–5× skuplji build, pa ukupno nije brži od radix lanac. Na našim podacima su lanci savršeni (tačno jedan red po probe-u), pa uklanjanje lanca malo donosi. Isplatilo bi se uz duže lance, npr. sa duplikatima ključeva u R.
-4. **Kad se jedna faza ubrza, druga postaje usko grlo.** Nakon verzije 3 particionisanje je ~70% vremena, a pola od toga su page faultovi zbog nove memorije. Sa memorijom zauzetom unaprijed (verzija 5) particionisanje je ~2× brže, pa je **radix lanac pool najbrža verzija**: 6,2× na 1 M i 11,1× na 4 M prema naivnom.
+4. **Kad se jedna faza ubrza, druga postaje usko grlo.** Nakon verzije 3 particionisanje je ~70% vremena, a pola od toga su page faultovi zbog nove memorije. Kad je memorija već zauzeta (verzija 5), particionisanje je ~2× brže, a ukupno 6,2× na 1 M i 11,1× na 4 M prema naivnom. To važi za proces koji izvršava mnogo joinova i ponovo koristi memoriju, kao baza sa memorijskim poolom. Za jedan, izolovan join verzija 5 traje kao verzija 3, pa je tada najbrža **radix lanac** (4,3× na 1 M i 6,9× na 4 M).
 5. **Broj particija je kompromis.** Više particija daje manje tabele, ali skuplje particionisanje, jer se istovremeno piše na 2^B mjesta. Najbolje je B = 6–8.
 6. **Slabost [4] se na ovim podacima ne vidi.** Gusti ključevi daju savršenu raspodjelu po bucketima. Efekat bi se vidio tek sa slučajnim ključevima.

@@ -24,7 +24,7 @@ Tabela od čvorova je namjerno spora referentna verzija: na vrhu [`cvor_tabela.h
 
 Na našim podacima (gusti ključevi, savršeni lanci od jednog reda) radix CSR ima ~15–20% brži probe, ali 4–5× skuplji build (redovi se premještaju po bucketima), pa ukupno nije brži od radix lanac.
 
-Radix lanac pool ne traži novu memoriju od operativnog sistema u svakom pokretanju, pa ne plaća page faultove. Particionisanje je zato ~2× brže. To je ista implementacija algoritma, samo sa memorijom zauzetom izvan mjerenja.
+Radix lanac pool ne traži novu memoriju od operativnog sistema u svakom pokretanju, pa ne plaća page faultove, i particionisanje je ~2× brže. To je ista implementacija algoritma kao radix lanac, samo sa memorijom zauzetom izvan mjerenja. Ubrzanje je stvarno kad isti proces izvršava mnogo joinova i ponovo koristi memoriju (kao baza sa memorijskim poolom). Za jedan, izolovan join pool verzija traje isto kao radix lanac. Detaljnije u [DOKUMENTACIJA.md](DOKUMENTACIJA.md#5-radix-lanac-pool-memorija-za-particije-zauzeta-unaprijed).
 
 ## Fajlovi
 
