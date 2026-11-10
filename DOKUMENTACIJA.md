@@ -1,6 +1,6 @@
 # Hash join: pet verzija
 
-Kratak pregled pet implementacija hash joina `R ⋈ S` po ključu (`R.key = S.key`), sa ključnim razlikama i rezultatima mjerenja. Uputstvo za pokretanje je u [README.md](README.md).
+Kratak pregled pet implementacija hash joina `R ⋈ S` po ključu (`R.key = S.key`), sa ključnim razlikama, rezultatima mjerenja i [poređenjem sa DuckDB-om](#poređenje-sa-duckdb-om). Uputstvo za pokretanje je u [README.md](README.md).
 
 ## Zadatak
 
@@ -141,35 +141,71 @@ Verzije 2–4 plaćaju page faultove u svakom pokretanju i zbog jednog detalja g
 
 ## Rezultati
 
-i7-11800H (L1d 48 KB i L2 1,25 MB po jezgru, L3 24 MB), WSL2, jedna nit, medijana 10 mjerenja. Sve brojke su iz jednog pokretanja programa. Prikazana je najbolja vrijednost B za svaku radix verziju. Faza 1 je kod naivnog build, a kod radix verzija particionisanje R i S. Faza 2 je kod naivnog probe, a kod radix verzija join po particijama.
+i7-11800H (8 jezgara; L1d 48 KB i L2 1,25 MB po jezgru, L3 24 MB), WSL2, jedna nit, medijana 10 mjerenja. Sve brojke u ovoj i sljedećoj sekciji (uključujući DuckDB) su iz jednog uzastopnog pokretanja. Prikazana je najbolja vrijednost B za svaku radix verziju. Faza 1 je kod naivnog build, a kod radix verzija particionisanje R i S. Faza 2 je kod naivnog probe, a kod radix verzija join po particijama.
 
 **R = 1 M, S = 10 M**
 
 | verzija | faza 1 | faza 2 | ukupno | ubrzanje | LLC promašaji/red |
 |---|---|---|---|---|---|
-| naivni | 39,0 ms | 337,8 ms | 376,8 ms | 1,00× | 1,23 |
-| radix čvorovi (B=6) | 65,0 ms | 81,3 ms | 146,3 ms | 2,58× | 0,20 |
-| radix lanac (B=6) | 62,2 ms | 26,3 ms | 88,5 ms | 4,26× | 0,21 |
-| radix CSR (B=6) | 60,5 ms | 35,6 ms | 96,1 ms | 3,92× | 0,21 |
-| radix lanac pool (B=6) | 32,4 ms | 28,1 ms | 60,4 ms | 6,23× | 0,19 |
+| naivni | 23,6 ms | 142,3 ms | 165,9 ms | 1,00× | 1,18 |
+| radix čvorovi (B=6) | 43,4 ms | 51,4 ms | 94,7 ms | 1,75× | 0,21 |
+| radix lanac (B=6) | 42,1 ms | 17,6 ms | 59,6 ms | 2,78× | 0,20 |
+| radix CSR (B=6) | 43,5 ms | 24,8 ms | 68,3 ms | 2,43× | 0,22 |
+| radix lanac pool (B=6) | 21,1 ms | 17,5 ms | 38,7 ms | 4,29× | 0,18 |
 
 **R = 4 M, S = 16 M**
 
 | verzija | faza 1 | faza 2 | ukupno | ubrzanje | LLC promašaji/red |
 |---|---|---|---|---|---|
-| naivni | 323,0 ms | 1034,4 ms | 1357,4 ms | 1,00× | 2,31 |
-| radix čvorovi (B=8) | 154,5 ms | 228,5 ms | 383,0 ms | 3,54× | 0,29 |
-| radix lanac (B=6) | 125,4 ms | 71,9 ms | 197,3 ms | 6,88× | 0,21 |
-| radix CSR (B=6) | 110,0 ms | 95,8 ms | 205,8 ms | 6,60× | 0,22 |
-| radix lanac pool (B=6) | 55,1 ms | 67,6 ms | 122,6 ms | 11,07× | 0,19 |
+| naivni | 178,9 ms | 345,9 ms | 524,9 ms | 1,00× | 2,20 |
+| radix čvorovi (B=8) | 92,9 ms | 143,9 ms | 236,7 ms | 2,22× | 0,29 |
+| radix lanac (B=6) | 72,5 ms | 39,7 ms | 112,2 ms | 4,68× | 0,20 |
+| radix CSR (B=6) | 77,2 ms | 61,8 ms | 139,0 ms | 3,78× | 0,24 |
+| radix lanac pool (B=6) | 41,2 ms | 41,0 ms | 82,2 ms | 6,39× | 0,20 |
 
 Mašina je između pokretanja programa dosta varirala (naivni 1 M: od ~160 do ~380 ms), pa apsolutna vremena iz različitih pokretanja nisu uporediva. Omjere treba gledati unutar iste tabele.
 
+## Poređenje sa DuckDB-om
+
+Kao industrijska referenca isti join je izvršen u [DuckDB](https://duckdb.org)-u (verzija 2.0.0), skriptom [`duckdb_join.py`](duckdb_join.py). Podaci imaju istu raspodjelu (ne iste redove, jer se `std::mt19937` ne može ponoviti u SQL-u), a rezultat se provjerava istim checksum-om. DuckDB izvršava upit u svom C++ motoru; Python je samo omotač i dodaje ~0,2 ms po upitu.
+
+DuckDB-ovo vrijeme uključuje i posao oko joina (čitanje tabela, cjevovod operatora, agregaciju). Zato skript mjeri i **isti upit bez joina**, a razlika je **procjena samog joina**, koja je najbliža koloni „ukupno“ iz naših tabela.
+
+**Jedna nit** (fer poređenje sa našim sekvencijalnim verzijama):
+
+| | 1 M / 10 M | 4 M / 16 M |
+|---|---|---|
+| DuckDB: join upit | 80,8 ms | 893,6 ms |
+| DuckDB: isti upit bez joina | 31,4 ms | 50,6 ms |
+| **DuckDB: procjena samog joina** | **49,4 ms** | **843,1 ms** |
+| naš naivni | 165,9 ms | 524,9 ms |
+| **naš radix lanac (B=6)** | **59,6 ms** | **112,2 ms** |
+| naš radix lanac pool (B=6) | 38,7 ms | 82,2 ms |
+
+**Osam niti** (DuckDB-ov uobičajeni režim; cilj za paralelnu verziju):
+
+| | 1 M / 10 M | 4 M / 16 M |
+|---|---|---|
+| DuckDB: join upit | 23,1 ms | 211,5 ms |
+| DuckDB: procjena samog joina | 17,7 ms | 201,4 ms |
+
+**Šta pokazuje:**
+
+1. **Na 1 M DuckDB je malo brži.** Njegov join (~49 ms) je ~1,2× brži od našeg najboljeg za jedan join (radix lanac, 60 ms). Njegova hash tabela tu još stane u keš, a probe je vektorizovan (blokovi od ~2000 redova), pa dobro skriva čekanje na memoriju.
+2. **Na 4 M DuckDB naglo uspori.** 4× više redova R, a join je ~17× sporiji (49 → 843 ms), i sporiji je čak i od našeg naivnog. Hash tabela za cijelu R više ne stane u keš, a probe strana se ne particioniše. Naš radix lanac je tu **~7,5× brži**. Upravo ovaj problem radix join rješava.
+3. **Posao oko joina je mali** (31–51 ms sa jednom niti), pa razlika na 4 M nije posljedica toga što DuckDB radi više posla, nego samog joina.
+4. **Sa 8 niti** DuckDB na 4 M (201 ms) i dalje je sporiji od našeg radix lanca sa **jednom** niti (112 ms). Na 1 M je sa 8 niti ~3,4× brži od nas (18 prema 60 ms). To je realan cilj za paralelnu verziju.
+
+**Napomene za tumačenje:**
+- DuckDB je opšta baza: radi sa bilo kojim tipovima, NULL vrijednostima i upitima. Naš kod je specijalizovan za ovaj jedan slučaj (`uint32_t` ključevi, rezultat se samo broji i sabira). Pošteno je reći da je *specijalizovan radix join za ovaj slučaj brži od opšte baze kad tabela ne stane u keš*, a ne da je brži od DuckDB-a općenito.
+- Prema DuckDB-ovom dizajnu (rad *Saving Private Hash Join*, VLDB 2025), njegovo radix particionisanje služi prvenstveno za joinove veće od RAM-a i za paralelni build, a ne da particije stanu u keš. Kad sve stane u memoriju, join se ponaša kao join bez particionisanja, sa jednom tabelom za cijelu build stranu. To objašnjava pad performansi na 4 M.
+
 ## Ključni zaključci
 
-1. **Particionisanje rješava keš problem.** LLC promašaji padaju sa 1,2–2,3 na ~0,2 po redu, jer tabela particije stane u keš. Radix čvorovi su 2,6–3,5× brži od naivnog, i to sa istom, sporom tabelom.
-2. **Struktura hash tabele je sljedeće usko grlo.** Nizovi umjesto čvorova (verzija 3) ubrzavaju join po particijama 3,1× na 1 M (81 → 26 ms) i 3,2× na 4 M (229 → 72 ms).
+1. **Particionisanje rješava keš problem.** LLC promašaji padaju sa 1,2–2,2 na ~0,2 po redu, jer tabela particije stane u keš. Radix čvorovi su 1,8–2,2× brži od naivnog, i to sa istom, sporom tabelom.
+2. **Struktura hash tabele je sljedeće usko grlo.** Nizovi umjesto čvorova (verzija 3) ubrzavaju join po particijama 2,9× na 1 M (51 → 18 ms) i 4,5× na 4 M (177 → 40 ms), uz B = 6.
 3. **Popravka slabosti nije automatski ubrzanje.** Radix CSR ima 15–20% brži probe, ali 4–5× skuplji build, pa ukupno nije brži od radix lanac. Na našim podacima su lanci savršeni (tačno jedan red po probe-u), pa uklanjanje lanca malo donosi. Isplatilo bi se uz duže lance, npr. sa duplikatima ključeva u R.
-4. **Kad se jedna faza ubrza, druga postaje usko grlo.** Nakon verzije 3 particionisanje je ~70% vremena, a pola od toga su page faultovi zbog nove memorije. Kad je memorija već zauzeta (verzija 5), particionisanje je ~2× brže, a ukupno 6,2× na 1 M i 11,1× na 4 M prema naivnom. To važi za proces koji izvršava mnogo joinova i ponovo koristi memoriju, kao baza sa memorijskim poolom. Za jedan, izolovan join verzija 5 traje kao verzija 3, pa je tada najbrža **radix lanac** (4,3× na 1 M i 6,9× na 4 M).
+4. **Kad se jedna faza ubrza, druga postaje usko grlo.** Nakon verzije 3 particionisanje je ~70% vremena, a pola od toga su page faultovi zbog nove memorije. Kad je memorija već zauzeta (verzija 5), particionisanje je ~2× brže, a ukupno 4,3× na 1 M i 6,4× na 4 M prema naivnom. To važi za proces koji izvršava mnogo joinova i ponovo koristi memoriju, kao baza sa memorijskim poolom. Za jedan, izolovan join verzija 5 traje kao verzija 3, pa je tada najbrža **radix lanac** (2,8× na 1 M i 4,7× na 4 M).
 5. **Broj particija je kompromis.** Više particija daje manje tabele, ali skuplje particionisanje, jer se istovremeno piše na 2^B mjesta. Najbolje je B = 6–8.
 6. **Slabost [4] se na ovim podacima ne vidi.** Gusti ključevi daju savršenu raspodjelu po bucketima. Efekat bi se vidio tek sa slučajnim ključevima.
+7. **Industrijska baza potvrđuje problem.** DuckDB sa jednom niti je na 1 M malo brži od našeg najboljeg joina, ali na 4 M, kad mu hash tabela ne stane u keš, uspori ~17× i postaje ~7,5× sporiji od radix lanca. I sa 8 niti je na 4 M sporiji od našeg radix lanca sa jednom niti.
