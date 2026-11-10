@@ -91,9 +91,11 @@ pip install duckdb
 python duckdb_join.py
 ```
 
-**Windows (PowerShell):**
+**Windows (PowerShell).** Ako Python nije instaliran (`py` nije prepoznat), instaliraj ga pa ponovo otvori PowerShell. Jednostavnije je pokrenuti skript u WSL-u, kao za Linux.
 
 ```powershell
+winget install -e --id Python.Python.3.13      # samo ako Python nije instaliran
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # samo ako Activate.ps1 javi gresku
 py -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install duckdb
