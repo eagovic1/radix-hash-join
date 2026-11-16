@@ -1,4 +1,4 @@
-# Pokrece VTune "Microarchitecture Exploration" za svih 5 verzija joina
+# Pokrece VTune "Microarchitecture Exploration" za svih 6 verzija joina
 # i snima tekstualni sazetak svake u docs\<verzija>_summary.txt.
 #
 # MORA se pokrenuti kao administrator (inace VTune ne moze do sampling drajvera):
@@ -11,7 +11,7 @@
 $ErrorActionPreference = "Continue"
 $repo  = $PSScriptRoot
 $vtune = "${env:ProgramFiles(x86)}\Intel\oneAPI\vtune\latest\bin64\vtune.exe"
-$verzije = "naivni", "radix_cvorovi", "radix_lanac", "radix_csr", "radix_lanac_pool"
+$verzije = "naivni", "radix_cvorovi", "radix_lanac", "radix_csr", "radix_lanac_pool", "radix_lanac_opt"
 
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)

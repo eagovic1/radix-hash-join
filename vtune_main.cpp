@@ -1,12 +1,14 @@
 // Jedna verzija hash joina po programu, za profiliranje u Intel VTune-u.
 //
-// Isti izvorni fajl se prevodi pet puta (vidi build.bat), svaki put sa drugom
-// vrijednoscu VARIJANTA, pa nastane pet .exe fajlova:
+// Isti izvorni fajl se prevodi sest puta (vidi build.bat), svaki put sa drugom
+// vrijednoscu VARIJANTA, pa nastane sest .exe fajlova:
 //   1 naivni.exe           - jedna hash tabela od cvorova za cijelu R
 //   2 radix_cvorovi.exe    - radix, bucket je lista cvorova
 //   3 radix_lanac.exe      - radix, lanac kroz nizove indeksa
 //   4 radix_csr.exe        - radix, bucket je uzastopan komad niza
 //   5 radix_lanac_pool.exe - radix lanac, baferi za particije zauzeti unaprijed
+//   6 radix_lanac_opt.exe  - kao 5, plus write-combining baferi pri particionisanju
+//                            i __restrict (vidi radix_opt.hpp)
 //
 // Svaki program:
 //   1) generise podatke (ne profilira se),
@@ -24,6 +26,7 @@
 
 #include "hash_join.hpp"
 #include "radix_join.hpp"
+#include "radix_opt.hpp"
 
 #include <chrono>
 #include <cstdlib>
@@ -38,7 +41,7 @@
 #endif
 
 #ifndef VARIJANTA
-#error "Prevedi sa /DVARIJANTA=1..5 (vidi build.bat)"
+#error "Prevedi sa /DVARIJANTA=1..6 (vidi build.bat)"
 #endif
 
 #if VARIJANTA == 1
@@ -51,8 +54,10 @@ static const char* NAZIV = "radix lanac";
 static const char* NAZIV = "radix CSR";
 #elif VARIJANTA == 5
 static const char* NAZIV = "radix lanac pool";
+#elif VARIJANTA == 6
+static const char* NAZIV = "radix lanac opt";
 #else
-#error "VARIJANTA mora biti 1..5"
+#error "VARIJANTA mora biti 1..6"
 #endif
 
 int main(int argc, char** argv) {
@@ -80,6 +85,11 @@ int main(int argc, char** argv) {
     Particije Rp, Sp;
     Rp.redovi.resize(R.size());
     Sp.redovi.resize(S.size());
+#elif VARIJANTA == 6
+    // Isto kao 5: poravnati baferi za particije zauzeti i mapirani unaprijed.
+    ParticijeOpt Rp, Sp;
+    Rp.redovi.resize(R.size());
+    Sp.redovi.resize(S.size());
 #endif
 
     using sat = std::chrono::steady_clock;
@@ -103,6 +113,10 @@ int main(int argc, char** argv) {
         particionisi_u(R, B, Rp);
         particionisi_u(S, B, Sp);
         rez = join_particija_lanac(Rp, Sp, B);
+#elif VARIJANTA == 6
+        particionisi_opt(R, B, Rp);
+        particionisi_opt(S, B, Sp);
+        rez = join_particija_opt(Rp, Sp, B);
 #endif
         // Rezultat se mora iskoristiti, inace ga kompajler moze izbaciti.
         if (!isti(rez, ocekivano)) { ok = false; break; }

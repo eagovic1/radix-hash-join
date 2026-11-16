@@ -133,7 +133,8 @@ Svaka verzija joina se prevodi u svoj `.exe`, koji pokreće samo tu verziju:
 build.bat
 ```
 
-Nastaju `bin\naivni.exe`, `bin\radix_cvorovi.exe`, `bin\radix_lanac.exe`, `bin\radix_csr.exe` i `bin\radix_lanac_pool.exe`.
+Nastaju `bin\naivni.exe`, `bin\radix_cvorovi.exe`, `bin\radix_lanac.exe`, `bin\radix_csr.exe`, `bin\radix_lanac_pool.exe` i `bin\radix_lanac_opt.exe`.
+Verzija 6 (`radix_opt.hpp`) je radix lanac pool sa software write-combining baferima pri particionisanju i `__restrict`. Sa B = 8 smanjuje Store Bound (DTLB), ali dodaje pogrešno predviđene skokove, pa je oko 5% sporija od verzije 5. Brža je tek od B ≈ 11.
 Treba Visual Studio 2022 sa "Desktop development with C++". Ako je instaliran VTune, koristi se ITT API, pa VTune mjeri samo join, bez generisanja podataka.
 
 Iste verzije se mogu prevesti i GCC-om (MSYS2 UCRT64, `pacman -S mingw-w64-ucrt-x86_64-gcc`):

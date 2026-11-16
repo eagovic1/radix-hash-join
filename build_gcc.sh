@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prevodi pet verzija hash joina GCC-om u pet .exe fajlova u bin/gcc/
+# Prevodi sest verzija hash joina GCC-om u sest .exe fajlova u bin/gcc/
 # (MSVC verzije iz build.bat ostaju u bin/, pa se mogu porediti).
 #
 # Pokretanje iz terminala "MSYS2 UCRT64" (treba: pacman -S mingw-w64-ucrt-x86_64-gcc):
@@ -47,7 +47,9 @@ fi
 prevedi() {
     local broj=$1 ime=$2
     echo "Prevodim $ime.exe ..."
+    # -fopt-info-vec-all: izvjestaj koje petlje su vektorizovane i zasto nisu
     if ! g++ "${FLAGS[@]}" "${ITT_FLAGS[@]}" -DVARIJANTA="$broj" vtune_main.cpp \
+            -fopt-info-vec-all="$OUT/obj/$ime.vec.txt" \
             "${ITT_OBJ[@]}" "${LDFLAGS[@]}" -o "$OUT/$ime.exe" >"$OUT/obj/$ime.log" 2>&1; then
         cat "$OUT/obj/$ime.log"
         echo "GRESKA pri prevodjenju $ime.exe"
@@ -60,6 +62,7 @@ prevedi 2 radix_cvorovi
 prevedi 3 radix_lanac
 prevedi 4 radix_csr
 prevedi 5 radix_lanac_pool
+prevedi 6 radix_lanac_opt
 
 echo
 echo "Gotovo. Programi su u $OUT/:"

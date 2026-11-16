@@ -1,5 +1,5 @@
 @echo off
-rem Prevodi pet verzija hash joina u pet .exe fajlova u bin\ (za Intel VTune).
+rem Prevodi sest verzija hash joina u sest .exe fajlova u bin\ (za Intel VTune).
 rem Pokretanje: dvoklik ili "build.bat" iz bilo kojeg Command Prompta.
 rem Ako cl.exe nije u PATH-u, sam ucita Visual Studio okruzenje (vcvars64).
 setlocal
@@ -33,13 +33,15 @@ echo VTune ITT API nije nadjen: profilira se cijeli program.
 if not exist bin\obj mkdir bin\obj
 
 rem /O2 = optimizacije (Release), /Zi + /DEBUG = simboli da VTune pokaze imena funkcija
-set FLAGS=/nologo /O2 /Zi /EHsc /std:c++17 /W3
+rem /Qvec-report:2 = izvjestaj koje petlje su vektorizovane i zasto nisu (u bin\obj\<verzija>.log)
+set FLAGS=/nologo /O2 /Zi /EHsc /std:c++17 /W3 /Qvec-report:2
 
 call :prevedi 1 naivni           || exit /b 1
 call :prevedi 2 radix_cvorovi    || exit /b 1
 call :prevedi 3 radix_lanac      || exit /b 1
 call :prevedi 4 radix_csr        || exit /b 1
 call :prevedi 5 radix_lanac_pool || exit /b 1
+call :prevedi 6 radix_lanac_opt  || exit /b 1
 
 echo.
 echo Gotovo. Programi su u bin\:
