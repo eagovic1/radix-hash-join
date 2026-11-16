@@ -136,6 +136,15 @@ build.bat
 Nastaju `bin\naivni.exe`, `bin\radix_cvorovi.exe`, `bin\radix_lanac.exe`, `bin\radix_csr.exe` i `bin\radix_lanac_pool.exe`.
 Treba Visual Studio 2022 sa "Desktop development with C++". Ako je instaliran VTune, koristi se ITT API, pa VTune mjeri samo join, bez generisanja podataka.
 
+Iste verzije se mogu prevesti i GCC-om (MSYS2 UCRT64, `pacman -S mingw-w64-ucrt-x86_64-gcc`):
+
+```bash
+./build_gcc.sh
+```
+
+Programi idu u `bin/gcc/`, pa se mogu porediti sa MSVC verzijama iz `bin/`. ITT API se prevodi iz VTune SDK izvora (`sdk/src/ittnotify`).
+GCC pravi DWARF simbole, a ne PDB, pa VTune možda neće pokazati imena funkcija.
+
 Argumenti: `naivni.exe [N_R] [N_S] [B] [sekunde]`. Podrazumijevane vrijednosti su 1M, 10M, B = 8 i 3 s.
 Join se ponavlja dok ne prođe zadato vrijeme, jer VTune treba bar oko 1 s za pouzdane metrike (MUX reliability > 0.8).
 

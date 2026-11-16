@@ -68,6 +68,7 @@ int main(int argc, char** argv) {
     const Rezultat ocekivano = ocekivani_rezultat(S);
 
 #if VARIJANTA == 1
+    (void)B;  // naivni join nema particije
     std::printf("%s, R = %zu, S = %zu, cilj %.1f s\n", NAZIV, N_R, N_S, sekunde);
 #else
     std::printf("%s, R = %zu, S = %zu, B = %d, cilj %.1f s\n", NAZIV, N_R, N_S, B, sekunde);
