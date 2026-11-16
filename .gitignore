@@ -4,3 +4,4 @@ join.exe
 *.obj
 .venv/
 bin/
+vtune_rezultati/
