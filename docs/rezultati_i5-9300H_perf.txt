@@ -1,0 +1,41 @@
+NAPOMENA: OVO NIJE VTUNE MJERENJE.
+Izlaz programa main.cpp (./join), cache promasaji su izmjereni Linux perf
+brojacima (perf_event_open) u WSL2. VTune 2026.x ne podrzava ovaj procesor
+(Coffee Lake, 9. gen.), pa VTune rezultati moraju doci s druge masine.
+
+Masina:   Intel Core i5-9300H (4 jezgre / 8 niti), 8 GB RAM, 1 modul (single-channel), 2400 MT/s
+Sistem:   Windows 10 + WSL2 Ubuntu 24.04 (kernel 6.18.58.1-microsoft-standard-WSL2)
+Prevod:   g++ 13.3.0, g++ -O2 -std=c++17 main.cpp -o join
+Pokrenuto: ./join (podrazumijevano R = 1M, S = 10M), jedna nit, 2026-11-16
+Napomena: laptop, vremena variraju izmedju pokretanja (frekvencija procesora, pozadinski programi)
+
+R: 1000000 redova, S: 10000000 redova, ocekivano 10000000 redova rezultata
+1 zagrijavanje + 10 mjerenja, vremena su medijane u ms
+
+naivni:            jedna hash tabela od cvorova za cijelu R (cvor_tabela.hpp)
+radix cvorovi:     bucket je lista cvorova, nova tabela za svaku particiju (cvor_tabela.hpp)
+radix lanac:       bucket je lanac kroz nizove indeksa, jedna tabela (lanac_tabela.hpp)
+radix CSR:         bucket je uzastopan komad niza, bez lanca (csr_tabela.hpp)
+radix lanac pool:  radix lanac, baferi za particije zauzeti jednom, unaprijed
+faza 1: naivni = build,  radix verzije = particionisanje R i S
+faza 2: naivni = probe,  radix verzije = join po particijama (build + probe)
+L1D/red, LLC/red: cache promasaji obje faze po redu (R + S)
+
+verzija                 faza 1    faza 2    ukupno  ubrzanje   M red/s   L1D/red   LLC/red
+naivni                    72.7     704.9     777.5     1.00x      14.1      5.41      7.22
+radix cvorovi B=2         68.4     454.5     522.8     1.49x      21.0      4.57      3.46
+radix cvorovi B=4         66.1     161.8     227.9     3.41x      48.3      3.24      0.80
+radix cvorovi B=6         73.5     149.4     222.9     3.49x      49.3      3.28      0.83
+radix cvorovi B=8         75.1     125.3     200.3     3.88x      54.9      3.21      0.83
+radix lanac B=2           67.6      80.9     148.6     5.23x      74.0      3.49      0.86
+radix lanac B=4           71.3      55.0     126.3     6.16x      87.1      3.46      0.73
+radix lanac B=6           69.4      36.7     106.1     7.33x     103.7      3.42      0.80
+radix lanac B=8           75.8      22.4      98.2     7.92x     112.0      2.16      0.82
+radix CSR B=2             73.3      79.9     153.3     5.07x      71.8      3.00      0.82
+radix CSR B=4             69.6      61.3     130.8     5.94x      84.1      3.15      0.78
+radix CSR B=6             71.6      32.8     104.4     7.45x     105.3      3.36      0.82
+radix CSR B=8             73.7      27.3     101.0     7.70x     108.9      1.65      0.83
+radix lanac pool B=2      30.8      82.9     113.7     6.84x      96.7      3.48      0.84
+radix lanac pool B=4      34.9      58.9      93.8     8.29x     117.3      3.45      0.71
+radix lanac pool B=6      35.0      32.1      67.1    11.58x     163.8      3.42      0.78
+radix lanac pool B=8      37.5      22.2      59.7    13.03x     184.4      2.14      0.79
