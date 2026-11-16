@@ -124,3 +124,22 @@ py -m venv .venv
 pip install duckdb
 python duckdb_join.py
 ```
+
+## Profiliranje u Intel VTune-u (Windows)
+
+Svaka verzija joina se prevodi u svoj `.exe`, koji pokreće samo tu verziju:
+
+```bat
+build.bat
+```
+
+Nastaju `bin\naivni.exe`, `bin\radix_cvorovi.exe`, `bin\radix_lanac.exe`, `bin\radix_csr.exe` i `bin\radix_lanac_pool.exe`.
+Treba Visual Studio 2022 sa "Desktop development with C++". Ako je instaliran VTune, koristi se ITT API, pa VTune mjeri samo join, bez generisanja podataka.
+
+Argumenti: `naivni.exe [N_R] [N_S] [B] [sekunde]`. Podrazumijevane vrijednosti su 1M, 10M, B = 8 i 3 s.
+Join se ponavlja dok ne prođe zadato vrijeme, jer VTune treba bar oko 1 s za pouzdane metrike (MUX reliability > 0.8).
+
+Za hardverske brojače (Microarchitecture Exploration) hipervizor mora biti isključen:
+`bcdedit /set hypervisorlaunchtype off`, pa restart. WSL tada ne radi. Vraća se sa `auto`.
+
+Screenshotovi rezultata idu u `docs/`.
