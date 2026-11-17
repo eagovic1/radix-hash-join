@@ -152,4 +152,6 @@ Join se ponavlja dok ne prođe zadato vrijeme, jer VTune treba bar oko 1 s za po
 Za hardverske brojače (Microarchitecture Exploration) hipervizor mora biti isključen:
 `bcdedit /set hypervisorlaunchtype off`, pa restart. WSL tada ne radi. Vraća se sa `auto`.
 
-Screenshotovi rezultata idu u `docs/`.
+`vtune_sve.ps1` profilira svih 6 verzija i snima sažetke u `docs/gcc/` (ili `docs/msvc/` sa `-Kompajler msvc`).
+
+Vizuelno poređenje GCC rezultata je u [`docs/vtune_poredjenje.html`](docs/vtune_poredjenje.html) (otvara se dvoklikom, bez interneta). Podaci su ugrađeni iz `docs/gcc/vtune_gcc_tigerlake.csv` (VTune metrike iz sažetaka) i `docs/gcc/vrijeme_gcc_tigerlake.csv` (vrijeme po joinu, mjereno bez VTune-a).

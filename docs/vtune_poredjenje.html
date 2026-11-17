@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="bs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Radix join VTune poređenje</title>
+<!--
+  Vizuelno poredjenje VTune rezultata za svih 6 verzija joina (GCC build).
+  Samostalna stranica: otvara se dvoklikom, bez interneta i servera.
+  Podaci su ugradjeni iz docs/gcc/vtune_gcc_tigerlake.csv i docs/gcc/vrijeme_gcc_tigerlake.csv.
+  Nova mjerenja: zamijeni CSV-ove i sadrzaj dva <script type="text/csv"> bloka ispod.
+-->
+<style>
+  /* Raspored: zaglavlje, dva grafikona u redu (vrijeme, top-down), pa grafikon po redu i tabela preko cijele sirine. */
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --text: #1d2330;
+    --muted: #5c6577;
+    --border: #d9dde5;
+    --grid: #e7eaf0;
+    --bar-muted: #c3c9d4;
+    --c0: #1f9d55;
+    --c1: #2f6fdb;
+    --c2: #c27c0e;
+    --c3: #8a4fd6;
+    --on-mark: #ffffff;
+    --font: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    --font-num: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151b; --panel: #1b1f27; --text: #e6e9ef; --muted: #9aa3b5; --border: #2e3442;
+      --grid: #262c38; --bar-muted: #465065;
+      --c0: #36a86c; --c1: #5a8be3; --c2: #b98024; --c3: #9b74e0; --on-mark: #0f1218;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151b; --panel: #1b1f27; --text: #e6e9ef; --muted: #9aa3b5; --border: #2e3442;
+    --grid: #262c38; --bar-muted: #465065;
+    --c0: #36a86c; --c1: #5a8be3; --c2: #b98024; --c3: #9b74e0; --on-mark: #0f1218;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 var(--font); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding-block: 32px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 24px; }
+  header { display: flex; flex-direction: column; gap: 8px; max-width: 72ch; }
+  h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; }
+  .lede { margin: 0; font-size: 18px; }
+  .lede b { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .meta { margin: 0; color: var(--muted); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .card h2 { margin: 0; font-size: 17px; font-weight: 600; text-wrap: balance; }
+  .sub { margin: 0; color: var(--muted); font-size: 14px; max-width: 76ch; }
+  .keys { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: var(--muted); }
+  .key { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .chart { position: relative; min-height: 220px; }
+  .chart svg { display: block; overflow: visible; }
+  .chart text { font-family: var(--font); font-size: 12.5px; }
+  .t-name { fill: var(--text); }
+  .t-val { fill: var(--text); font-variant-numeric: tabular-nums; }
+  .t-ax { fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .t-in { fill: var(--on-mark); font-weight: 600; font-variant-numeric: tabular-nums; pointer-events: none; }
+  .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px rgb(0 0 0 / 0.14); padding: 8px 12px; font-size: 13px; min-width: 180px; z-index: 2; }
+  .tip .t { font-weight: 600; margin-bottom: 4px; }
+  .tip .r { display: flex; justify-content: space-between; gap: 16px; color: var(--muted); }
+  .tip .r span:last-child { color: var(--text); font-variant-numeric: tabular-nums; }
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 7px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { color: var(--muted); font-weight: 600; vertical-align: bottom; white-space: normal; min-width: 62px; }
+  details summary { cursor: pointer; color: var(--muted); }
+  details ul { margin: 8px 0 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; max-width: 80ch; color: var(--muted); font-size: 14px; }
+  :focus-visible { outline: 2px solid var(--c1); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Radix join: šest verzija u VTune-u</h1>
+    <p class="lede">Najbrža je <b id="lead-name">—</b> sa <b id="lead-ms">—</b> ms po joinu, <b id="lead-x">—</b>× brže od naivnog hash joina.</p>
+    <p class="meta">Intel Tiger Lake H · GCC 16.2 (MSYS2), -O2 · R = 1 M, S = 10 M redova, B = 8 · VTune Microarchitecture Exploration, mjeri se samo join</p>
+  </header>
+
+  <div class="grid">
+    <section class="card" id="vrijeme">
+      <h2>Vrijeme po joinu</h2>
+      <p class="sub">Manje je bolje. Svaka verzija je 3 s ponavljala join, bez VTune-a.</p>
+      <div class="chart" id="ch-vrijeme"></div>
+    </section>
+
+    <section class="card" id="topdown">
+      <h2>Kuda odlaze pipeline slotovi</h2>
+      <p class="sub">Top-down podjela. Retiring je koristan rad, ostalo su slotovi u kojima procesor nije završio instrukciju.</p>
+      <div class="keys">
+        <span class="key"><i class="sw" style="background: var(--c0)"></i>Retiring</span>
+        <span class="key"><i class="sw" style="background: var(--c1)"></i>Front-End Bound</span>
+        <span class="key"><i class="sw" style="background: var(--c2)"></i>Bad Speculation</span>
+        <span class="key"><i class="sw" style="background: var(--c3)"></i>Back-End Bound</span>
+      </div>
+      <div class="chart" id="ch-topdown"></div>
+    </section>
+  </div>
+
+  <section class="card" id="po-redu">
+    <h2>Instrukcije i ciklusi po redu ulaza</h2>
+    <p class="sub">Koliko instrukcija procesor izvrši za jedan red (R + S) i koliko ciklusa to traje. Kad su ciklusi lijevo od instrukcija, procesor završava više od jedne instrukcije po ciklusu (CPI &lt; 1). Brojevi desno: instrukcije / ciklusi.</p>
+    <div class="keys">
+      <span class="key"><i class="sw" style="background: var(--c1)"></i>Instrukcije po redu</span>
+      <span class="key"><i class="sw" style="background: var(--c2)"></i>Ciklusi po redu</span>
+    </div>
+    <div class="chart" id="ch-redu"></div>
+  </section>
+
+  <section class="card" id="uska-grla">
+    <h2>Uska grla po verziji</h2>
+    <p class="sub">Udio ciklusa ili pipeline slotova (%) koji VTune pripisuje svakom uzroku. Tamnija ćelija je veći udio unutar te kolone. CPI i MUX nisu postoci.</p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Verzija</th><th>CPI</th><th>Memory Bound</th><th>DRAM Bound</th><th>L1 Bound</th><th>L2 Bound</th>
+            <th>Store Bound</th><th>DTLB Store Overhead</th><th>Core Bound</th><th>Branch Mispredict</th><th>MUX pouzdanost</th>
+          </tr>
+        </thead>
+        <tbody id="heat"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <details>
+    <summary>Kako je mjereno</summary>
+    <ul>
+      <li>VTune metrike su iz Microarchitecture Exploration analiza (<code>docs/gcc/*_summary.txt</code>, izvučene u <code>docs/gcc/vtune_gcc_tigerlake.csv</code>). Generisanje podataka je isključeno ITT pauzom, pa VTune mjeri samo petlju joinova.</li>
+      <li>Svaki program ponavlja join dok ne prođu 3 s. Zato su Clockticks skoro isti za sve verzije, a brzina se poredi preko vremena po joinu.</li>
+      <li>Vrijeme po joinu i broj ponavljanja su iz posebnog pokretanja istih exe-ova bez VTune-a, na istom računaru (<code>docs/gcc/vrijeme_gcc_tigerlake.csv</code>). Instrukcije i ciklusi po redu dijele VTune brojače tim brojem ponavljanja, pa su približni (oko ±5%).</li>
+      <li>VTune mjeri top-down kategorije multipleksiranjem brojača, pa im zbir ne mora biti 100 % (kod v5 je 115 %). Grafikon ih preračunava na 100 %, a tooltip pokazuje i izmjerene vrijednosti.</li>
+      <li>v4 ima Bad Speculation 9,4 % bez pogrešno predviđenih skokova: to su machine clears, ne grananje.</li>
+    </ul>
+  </details>
+</div>
+
+<script type="text/csv" id="csv-vtune">
+verzija,naziv,clockticks,instructions,cpi,mux,retiring,frontend,bad_spec,backend,memory_bound,core_bound,l1_bound,l2_bound,l3_bound,dram_bound,store_bound,dtlb_store,branch_mispredict
+v1_naivni,v1 naivni,13457300000,11106700000,1.212,0.982,17.7,4.8,0.0,77.8,62.5,15.4,1.9,0.8,3.7,59.0,0.1,2.9,0.0
+v2_radix_cvorovi,v2 radix čvorovi,13376800000,29154800000,0.459,0.953,44.3,10.6,4.4,40.7,19.0,21.7,7.0,5.2,0.1,0.9,13.2,17.1,4.4
+v3_radix_lanac,v3 radix lanac,13333100000,23529000000,0.567,0.980,34.1,5.9,2.1,57.8,34.1,23.8,9.9,8.1,0.5,1.5,29.3,29.1,2.1
+v4_radix_csr,v4 radix CSR,13333100000,27349300000,0.488,0.947,35.9,6.7,9.4,48.0,27.8,20.3,12.3,6.6,0.4,1.4,25.7,27.2,0.0
+v5_radix_lanac_pool,v5 radix lanac pool,13225000000,27689700000,0.478,0.931,46.2,5.4,0.0,63.4,38.5,24.9,6.8,8.4,0.5,1.1,19.6,30.8,0.0
+v6_radix_lanac_opt,v6 radix lanac opt,13158300000,30981000000,0.425,0.972,45.0,6.9,18.0,30.1,20.5,9.6,17.4,8.6,0.1,1.1,6.4,20.2,18.0
+</script>
+<script type="text/csv" id="csv-vrijeme">
+verzija,naziv,ponavljanja,ukupno_s,ms_po_joinu,miliona_redova_s
+v1_naivni,v1 naivni,14,3.20,228.3,48.2
+v2_radix_cvorovi,v2 radix čvorovi,29,3.08,106.2,103.6
+v3_radix_lanac,v3 radix lanac,49,3.00,61.3,179.5
+v4_radix_csr,v4 radix CSR,45,3.02,67.1,163.8
+v5_radix_lanac_pool,v5 radix lanac pool,67,3.04,45.4,242.5
+v6_radix_lanac_opt,v6 radix lanac opt,63,3.03,48.1,228.8
+</script>
+
+<script>
+(() => {
+  const SVG = 'http://www.w3.org/2000/svg';
+  const N_REDOVA = 11000000; // R = 1 M + S = 10 M
+  const nf = (d) => new Intl.NumberFormat('bs-BA', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const f0 = nf(0), f1 = nf(1), f2 = nf(2), f3 = nf(3);
+
+  function csv(id) {
+    const lines = document.getElementById(id).textContent.trim().split(/\r?\n/);
+    const head = lines[0].split(',');
+    return lines.slice(1).map((l) => {
+      const c = l.split(',');
+      const o = {};
+      head.forEach((h, i) => { const v = c[i]; o[h] = v !== '' && !isNaN(+v) ? +v : v; });
+      return o;
+    }).sort((a, b) => a.verzija.localeCompare(b.verzija));
+  }
+  const vtune = csv('csv-vtune');
+  const vrijeme = csv('csv-vrijeme');
+
+  // izvedene vrijednosti
+  const najbrza = vrijeme.reduce((a, r) => (r.ms_po_joinu < a.ms_po_joinu ? r : a));
+  const naivni = vrijeme.find((r) => r.verzija === 'v1_naivni');
+  const KAT = [['Retiring', 'retiring'], ['Front-End Bound', 'frontend'], ['Bad Speculation', 'bad_spec'], ['Back-End Bound', 'backend']];
+  const topdown = vtune.map((v) => {
+    const zbir = KAT.reduce((s, [, k]) => s + v[k], 0);
+    return { verzija: v.verzija, naziv: v.naziv, zbir, dijelovi: KAT.map(([ime, k], i) => ({ ime, i, izmjereno: v[k], udio: zbir ? (v[k] / zbir) * 100 : 0 })) };
+  });
+  const poRedu = vtune.map((v) => {
+    const t = vrijeme.find((r) => r.verzija === v.verzija);
+    const n = t.ponavljanja * N_REDOVA;
+    return { verzija: v.verzija, naziv: v.naziv, instr: v.instructions / n, cikl: v.clockticks / n };
+  });
+
+  document.getElementById('lead-name').textContent = najbrza.naziv;
+  document.getElementById('lead-ms').textContent = f1.format(najbrza.ms_po_joinu);
+  document.getElementById('lead-x').textContent = naivni ? f1.format(naivni.ms_po_joinu / najbrza.ms_po_joinu) : '—';
+
+  // ---------- pomocne funkcije za SVG ----------
+  function el(name, attrs, parent, text) {
+    const e = document.createElementNS(SVG, name);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function measure(svg, texts, cls) {
+    const g = el('g', {}, svg);
+    let w = 0;
+    for (const t of texts) w = Math.max(w, el('text', { class: cls }, g, t).getComputedTextLength());
+    g.remove();
+    return Math.ceil(w);
+  }
+  function niceMax(v) {
+    const p = Math.pow(10, Math.floor(Math.log10(v)));
+    for (const m of [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (m * p >= v) return m * p;
+    return 10 * p;
+  }
+  function ticks(max, n) {
+    const raw = max / n, p = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 2.5, 5, 10].map((m) => m * p).find((s) => s >= raw);
+    const out = [];
+    for (let v = 0; v <= max + 1e-9; v += step) out.push(v);
+    return out;
+  }
+  function barRight(x0, x1, y, h, r) {
+    const w = x1 - x0;
+    if (w <= 0) return '';
+    r = Math.min(r, w, h / 2);
+    return `M${x0},${y}H${x1 - r}Q${x1},${y} ${x1},${y + r}V${y + h - r}Q${x1},${y + h} ${x1 - r},${y + h}H${x0}Z`;
+  }
+  function tooltip(box) {
+    const t = document.createElement('div');
+    t.className = 'tip';
+    t.hidden = true;
+    box.appendChild(t);
+    return {
+      show(ev, title, rows) {
+        const parts = [Object.assign(document.createElement('div'), { className: 't', textContent: title })];
+        for (const [k, v] of rows) {
+          const r = document.createElement('div');
+          r.className = 'r';
+          r.append(Object.assign(document.createElement('span'), { textContent: k }), Object.assign(document.createElement('span'), { textContent: v }));
+          parts.push(r);
+        }
+        t.replaceChildren(...parts);
+        t.hidden = false;
+        const b = box.getBoundingClientRect();
+        let x = ev.clientX - b.left + 14, y = ev.clientY - b.top + 14;
+        if (x + t.offsetWidth > box.clientWidth) x = ev.clientX - b.left - t.offsetWidth - 14;
+        if (y + t.offsetHeight > box.clientHeight) y = Math.max(0, ev.clientY - b.top - t.offsetHeight - 14);
+        t.style.left = Math.max(0, x) + 'px';
+        t.style.top = y + 'px';
+      },
+      hide() { t.hidden = true; }
+    };
+  }
+  // okvir horizontalnog grafikona: imena lijevo, mreza i osa dole
+  function frame(box, rows, label, opts) {
+    box.replaceChildren();
+    const W = Math.max(260, box.clientWidth), band = 34, top = 2, plotH = rows.length * band, H = top + plotH + 40;
+    const svg = el('svg', { width: '100%', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': label }, box);
+    const lw = measure(svg, rows.map((r) => r.naziv), 't-name') + 12;
+    const vw = opts.valTexts ? measure(svg, opts.valTexts, 't-val') + opts.valPad : 6;
+    const x0 = lw, x1 = W - vw;
+    const x = (v) => x0 + (v / opts.max) * (x1 - x0);
+    const tv = opts.tickValues || ticks(opts.max, Math.max(2, Math.floor((x1 - x0) / 75)));
+    for (const v of tv) {
+      el('line', { x1: x(v), x2: x(v), y1: top, y2: top + plotH, stroke: 'var(--grid)', 'stroke-width': 1 }, svg);
+      el('text', { class: 't-ax', x: x(v), y: top + plotH + 16, 'text-anchor': 'middle' }, svg, opts.tickFmt(v));
+    }
+    if (opts.axisLabel) el('text', { class: 't-ax', x: x1, y: top + plotH + 34, 'text-anchor': 'end' }, svg, opts.axisLabel);
+    const yOf = (i) => top + i * band;
+    rows.forEach((r, i) => el('text', { class: 't-name', x: lw - 10, y: yOf(i) + band / 2, dy: '0.35em', 'text-anchor': 'end' }, svg, r.naziv));
+    return { svg, W, band, x, x1, yOf, tip: tooltip(box) };
+  }
+  function hit(f, i, onMove) {
+    const r = el('rect', { x: 0, y: f.yOf(i), width: f.W, height: f.band, fill: 'transparent' }, f.svg);
+    r.addEventListener('pointermove', onMove);
+    r.addEventListener('pointerleave', () => f.tip.hide());
+  }
+
+  // ---------- grafikoni ----------
+  function crtajVrijeme() {
+    const box = document.getElementById('ch-vrijeme');
+    const max = niceMax(Math.max(...vrijeme.map((r) => r.ms_po_joinu)));
+    const f = frame(box, vrijeme, 'Vrijeme po joinu u milisekundama za šest verzija', {
+      max, valTexts: vrijeme.map((r) => f1.format(r.ms_po_joinu) + ' ms'), valPad: 10, tickFmt: (v) => f0.format(v), axisLabel: 'ms po joinu'
+    });
+    vrijeme.forEach((r, i) => {
+      const h = f.band - 12;
+      el('path', { d: barRight(f.x(0), f.x(r.ms_po_joinu), f.yOf(i) + 6, h, 4), fill: r === najbrza ? 'var(--c1)' : 'var(--bar-muted)' }, f.svg);
+      el('text', { class: 't-val', x: f.x(r.ms_po_joinu) + 6, y: f.yOf(i) + f.band / 2, dy: '0.35em' }, f.svg, f1.format(r.ms_po_joinu) + ' ms');
+      hit(f, i, (ev) => f.tip.show(ev, r.naziv, [
+        ['ms po joinu', f1.format(r.ms_po_joinu)],
+        ['ponavljanja u 3 s', String(r.ponavljanja)],
+        ['M redova/s', f1.format(r.miliona_redova_s)],
+        ['sporija od najbrže', f2.format(r.ms_po_joinu / najbrza.ms_po_joinu) + '×']
+      ]));
+    });
+  }
+
+  function crtajTopdown() {
+    const box = document.getElementById('ch-topdown');
+    const f = frame(box, topdown, 'Top-down podjela pipeline slotova za šest verzija, u procentima', {
+      max: 100, tickValues: box.clientWidth > 420 ? [0, 25, 50, 75, 100] : [0, 50, 100], tickFmt: (v) => v + ' %'
+    });
+    topdown.forEach((r, i) => {
+      let acc = 0;
+      const y = f.yOf(i) + 6, h = f.band - 12;
+      r.dijelovi.forEach((d) => {
+        const xa = f.x(acc), xb = f.x(acc + d.udio);
+        acc += d.udio;
+        const w = Math.max(0, xb - xa - (d.i < 3 ? 2 : 0));
+        if (w <= 0) return;
+        const rect = el('rect', { x: xa, y, width: w, height: h, fill: `var(--c${d.i})` }, f.svg);
+        rect.addEventListener('pointermove', (ev) => f.tip.show(ev, `${r.naziv}: ${d.ime}`, [
+          ['udio (na 100 %)', f1.format(d.udio) + ' %'],
+          ['izmjereno u VTune-u', f1.format(d.izmjereno) + ' %'],
+          ['zbir četiri kategorije', f1.format(r.zbir) + ' %']
+        ]));
+        rect.addEventListener('pointerleave', () => f.tip.hide());
+        if (w >= 38) el('text', { class: 't-in', x: xa + w / 2, y: y + h / 2, dy: '0.35em', 'text-anchor': 'middle' }, f.svg, f0.format(d.udio) + ' %');
+      });
+    });
+  }
+
+  function crtajRedu() {
+    const box = document.getElementById('ch-redu');
+    const lab = (r) => `${f1.format(r.instr)} / ${f1.format(r.cikl)}`;
+    const max = niceMax(Math.max(...poRedu.map((r) => Math.max(r.instr, r.cikl))));
+    const f = frame(box, poRedu, 'Instrukcije i ciklusi po redu ulaza za šest verzija', {
+      max, valTexts: poRedu.map(lab), valPad: 18, tickFmt: (v) => f0.format(v), axisLabel: 'po redu ulaza'
+    });
+    poRedu.forEach((r, i) => {
+      const cy = f.yOf(i) + f.band / 2, xi = f.x(r.instr), xc = f.x(r.cikl);
+      el('line', { x1: Math.min(xi, xc), x2: Math.max(xi, xc), y1: cy, y2: cy, stroke: 'var(--bar-muted)', 'stroke-width': 2 }, f.svg);
+      el('circle', { cx: xi, cy, r: 6, fill: 'var(--c1)', stroke: 'var(--panel)', 'stroke-width': 2 }, f.svg);
+      el('circle', { cx: xc, cy, r: 6, fill: 'var(--c2)', stroke: 'var(--panel)', 'stroke-width': 2 }, f.svg);
+      el('text', { class: 't-val', x: f.x1 + 12, y: cy, dy: '0.35em' }, f.svg, lab(r));
+      hit(f, i, (ev) => f.tip.show(ev, r.naziv, [
+        ['instrukcije po redu', f1.format(r.instr)],
+        ['ciklusi po redu', f1.format(r.cikl)],
+        ['CPI', f3.format(r.cikl / r.instr)]
+      ]));
+    });
+  }
+
+  function crtajTabelu() {
+    const cols = ['cpi', 'memory_bound', 'dram_bound', 'l1_bound', 'l2_bound', 'store_bound', 'dtlb_store', 'core_bound', 'branch_mispredict', 'mux'];
+    const max = {};
+    cols.forEach((c) => { max[c] = Math.max(...vtune.map((r) => r[c])) || 1; });
+    const tbody = document.getElementById('heat');
+    tbody.replaceChildren();
+    vtune.forEach((r) => {
+      const tr = document.createElement('tr');
+      tr.appendChild(Object.assign(document.createElement('td'), { textContent: r.naziv }));
+      cols.forEach((c) => {
+        const td = document.createElement('td');
+        td.textContent = c === 'cpi' || c === 'mux' ? f3.format(r[c]) : f1.format(r[c]);
+        if (c !== 'mux' && r[c] > 0) td.style.background = `color-mix(in srgb, var(--c1) ${Math.round(6 + 44 * (r[c] / max[c]))}%, transparent)`;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+
+  function sve() { crtajVrijeme(); crtajTopdown(); crtajRedu(); }
+  crtajTabelu();
+  sve();
+  let cekanje;
+  new ResizeObserver(() => { clearTimeout(cekanje); cekanje = setTimeout(sve, 60); }).observe(document.querySelector('.wrap'));
+})();
+</script>
+</body>
+</html>

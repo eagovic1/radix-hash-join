@@ -1,0 +1,191 @@
+Elapsed Time: 3.367s
+    Clockticks: 13,376,800,000
+    Instructions Retired: 29,154,800,000
+    CPI Rate: 0.459
+    MUX Reliability: 0.953
+    Retiring: 44.3% of Pipeline Slots
+        Light Operations: 41.2% of Pipeline Slots
+            FP Arithmetic: 0.0% of uOps
+                FP x87: 0.0% of uOps
+                FP Scalar: 0.0% of uOps
+                FP Vector: 0.0% of uOps
+                    128-bit FP Vector: 0.0% of uOps
+                    256-bit FP Vector: 0.0% of uOps
+                    512-bit FP Vector: 0.0% of uOps
+            Memory Operations: 15.0% of Pipeline Slots
+            Branch Instructions: 8.6% of Pipeline Slots
+            Other: 17.6% of Pipeline Slots
+                Nop Instructions: 0.3% of Pipeline Slots
+        Heavy Operations: 3.1% of Pipeline Slots
+            Few Uops Instructions: 1.2% of Pipeline Slots
+            Microcode Sequencer: 1.9% of Pipeline Slots
+                Assists: 0.0% of Pipeline Slots
+                    FP Assists: 0.0% of Pipeline Slots
+                CISC: 1.9% of Pipeline Slots
+    Front-End Bound: 10.6% of Pipeline Slots
+        Front-End Latency: 2.9% of Pipeline Slots
+            ICache Misses: 0.1% of Clockticks
+                Code L2 Hit: 0.0% of Clockticks
+                Code L2 Miss: 0.3% of Clockticks
+            ITLB Misses: 0.7% of Clockticks
+                Code STLB Hit: 0.5% of Clockticks
+                Code STLB Miss: 0.2% of Clockticks
+                    Code STLB Miss 4K: 0.0% of Clockticks
+                    Code STLB Miss 2M: 0.0% of Clockticks
+            Branch Resteers: 0.4% of Clockticks
+                Mispredicts Resteers: 0.4% of Clockticks
+                Clears Resteers: 0.0% of Clockticks
+                Unknown Branches: 0.0% of Clockticks
+            MS Switches: 3.3% of Clockticks
+            Length Changing Prefixes: 0.0% of Clockticks
+            DSB Switches: 0.5% of Clockticks
+        Front-End Bandwidth: 7.7% of Pipeline Slots
+            Front-End Bandwidth MITE: 1.9% of Pipeline Slots
+                Decoder-0 Alone: 0.1% of Pipeline Slots
+                %MITE_4wide: 1.1% of Clockticks
+            Front-End Bandwidth DSB: 4.5% of Pipeline Slots
+            Front-End Bandwidth LSD: 1.9% of Pipeline Slots
+            MS: 0.8% of Pipeline Slots
+            (Info) DSB Coverage: 43.0%
+            (Info) LSD Coverage: 40.0%
+            (Info) DSB Misses: 1.9% of Pipeline Slots
+    Bad Speculation: 4.4% of Pipeline Slots
+        Branch Mispredict: 4.4% of Pipeline Slots
+            Other Mispredicts
+        Machine Clears: 0.0% of Pipeline Slots
+            Other Nukes: 0.0% of Pipeline Slots
+    Back-End Bound: 40.7% of Pipeline Slots
+     | A significant portion of pipeline slots are remaining empty. When
+     | operations take too long in the back-end, they introduce bubbles in the
+     | pipeline that ultimately cause fewer pipeline slots containing useful
+     | work to be retired per cycle than the machine is capable to support. This
+     | opportunity cost results in slower execution. Long-latency operations
+     | like divides and memory operations can cause this, as can too many
+     | operations being directed to a single execution port (for example, more
+     | multiply operations arriving in the back-end per cycle than the execution
+     | unit can support).
+     |
+        Memory Bound: 19.0% of Pipeline Slots
+            L1 Bound: 7.0% of Clockticks
+                DTLB Overhead: 4.8% of Clockticks
+                    Load STLB Hit: 4.7% of Clockticks
+                    Load STLB Miss: 0.1% of Clockticks
+                        Load STLB Miss 4K: 0.0% of Clockticks
+                        Load STLB Miss 2M: 0.0% of Clockticks
+                        Load STLB Miss 1G: 0.0% of Clockticks
+                Loads Blocked by Store Forwarding: 1.0% of Clockticks
+                L1 Latency Dependency: 17.5% of Clockticks
+                Lock Latency: 2.8% of Clockticks
+                Split Loads: 0.0% of Clockticks
+                4K Aliasing: 0.8% of Clockticks
+                FB Full: 1.7% of Clockticks
+            L2 Bound: 5.2% of Clockticks
+                L2 Hit Latency: 100.0% of Clockticks
+            L3 Bound: 0.1% of Clockticks
+                L3 Latency: 0.0% of Clockticks
+                SQ Full: 0.1% of Clockticks
+            DRAM Bound: 0.9% of Clockticks
+                Memory Bandwidth: 14.9% of Clockticks
+                Memory Latency: 17.4% of Clockticks
+            Store Bound: 13.2% of Clockticks
+                Store Latency: 34.3% of Clockticks
+                Split Stores: 0.0%
+                DTLB Store Overhead: 17.1% of Clockticks
+                    Store STLB Hit: 14.9% of Clockticks
+                    Store STLB Miss: 2.3% of Clockticks
+                        Store STLB Miss 4K: 0.0% of Clockticks
+                        Store STLB Miss 2M: 0.0% of Clockticks
+                        Store STLB Miss 1G: 0.0% of Clockticks
+        Core Bound: 21.7% of Pipeline Slots
+         | This metric represents how much Core non-memory issues were of a
+         | bottleneck. Shortage in hardware compute resources, or dependencies
+         | software's instructions are both categorized under Core Bound. Hence
+         | it may indicate the machine ran out of an OOO resources, certain
+         | execution units are overloaded or dependencies in program's data- or
+         | instruction- flow are limiting the performance (e.g. FP-chained long-
+         | latency arithmetic operations).
+         |
+            Divider: 23.3% of Clockticks
+             | Issue: The DIV unit is active for a significant portion of
+             | execution time.
+             | 
+             | Tips: Locate the hot long-latency operation(s) and try to
+             | eliminate them.  For example, if dividing by a constant, consider
+             | replacing the divide by a product of the inverse of the constant.
+             | If dividing an integer, consider using a right-shift instead.
+             |
+                FP Divider: 0.0% of Clockticks
+                INT Divider: 23.3% of Clockticks
+                 | This metric represents fraction of cycles where the Integer
+                 | Divider unit was active.
+                 |
+            Serializing Operations: 4.4% of Clockticks
+                Slow Pause: 0.0% of Clockticks
+            Port Utilization: 17.7% of Clockticks
+             | Issue: A significant fraction of cycles was stalled due to Core
+             | non-divider-related issues.
+             | 
+             | Tips: Use vectorization to reduce pressure on the execution ports
+             | as multiple elements are calculated with same uOp.
+             |
+                Cycles of 0 Ports Utilized: 0.5% of Clockticks
+                    Mixing Vectors: 0.0% of Clockticks
+                Cycles of 1 Port Utilized: 11.6% of Clockticks
+                Cycles of 2 Ports Utilized: 13.7% of Clockticks
+                Cycles of 3+ Ports Utilized: 40.1% of Clockticks
+                 | This metric represents Core cycles fraction CPU executed
+                 | total of 3 or more uops per cycle on all execution ports
+                 | (Logical Processor cycles since ICL, Physical Core cycles
+                 | otherwise).
+                 |
+                    ALU Operation Utilization: 37.1% of Clockticks
+                        Port 0: 37.1% of Clockticks
+                        Port 1: 32.6% of Clockticks
+                        Port 5: 31.4% of Clockticks
+                        Port 6: 47.5% of Clockticks
+                    Load Operation Utilization: 32.9% of Clockticks
+                    Store Operation Utilization: 15.8% of Clockticks
+                Vector Capacity Usage (FPU): 0.0%
+    Average CPU Frequency: 4.555 GHz
+    Total Thread Count: 2
+    Paused Time: 0.238s
+Effective Physical Core Utilization: 10.5% (0.844 out of 8)
+ | The metric value is low, which may signal a poor physical CPU cores
+ | utilization caused by:
+ |     - load imbalance
+ |     - threading runtime overhead
+ |     - contended synchronization
+ |     - thread/process underutilization
+ |     - incorrect affinity that utilizes logical cores instead of physical
+ |       cores
+ | Explore sub-metrics to estimate the efficiency of MPI and OpenMP parallelism
+ | or run the Locks and Waits analysis to identify parallel bottlenecks for
+ | other parallel runtimes.
+ |
+    Effective Logical Core Utilization: 5.9% (0.937 out of 16)
+     | The metric value is low, which may signal a poor logical CPU cores
+     | utilization. Consider improving physical core utilization as the first
+     | step and then look at opportunities to utilize logical cores, which in
+     | some cases can improve processor throughput and overall performance of
+     | multi-threaded applications.
+     |
+Collection and Platform Info
+    Application Command Line: C:\dev\radix-hash-join\bin\gcc\v2_radix_cvorovi.exe 
+    Operating System: Microsoft Windows 11
+    Computer Name: DESKTOP-E3A6NUS
+    Result Size: 33.3 MB 
+    Collection start time: 13:22:24 17/11/2026 UTC
+    Collection stop time: 13:22:28 17/11/2026 UTC
+    Collector Type: Event-based sampling driver
+    CPU
+        Name: Intel(R) microarchitecture code named Tigerlake H
+        Frequency: 2.304 GHz
+        Logical CPU Count: 16
+        Cache Allocation Technology
+            Level 2 capability: not detected
+            Level 3 capability: not detected
+
+If you want to skip descriptions of detected performance issues in the report,
+enter: vtune -report summary -report-knob show-issues=false -r <my_result_dir>.
+Alternatively, you may view the report in the csv format: vtune -report
+<report_name> -format=csv.

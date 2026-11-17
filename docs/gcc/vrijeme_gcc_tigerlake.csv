@@ -1,0 +1,7 @@
+verzija,naziv,ponavljanja,ukupno_s,ms_po_joinu,miliona_redova_s
+v1_naivni,v1 naivni,14,3.20,228.3,48.2
+v2_radix_cvorovi,v2 radix čvorovi,29,3.08,106.2,103.6
+v3_radix_lanac,v3 radix lanac,49,3.00,61.3,179.5
+v4_radix_csr,v4 radix CSR,45,3.02,67.1,163.8
+v5_radix_lanac_pool,v5 radix lanac pool,67,3.04,45.4,242.5
+v6_radix_lanac_opt,v6 radix lanac opt,63,3.03,48.1,228.8

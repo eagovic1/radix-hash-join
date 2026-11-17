@@ -1,0 +1,254 @@
+Elapsed Time: 3.346s
+    Clockticks: 13,333,100,000
+    Instructions Retired: 27,349,300,000
+    CPI Rate: 0.488
+    MUX Reliability: 0.947
+    Retiring: 35.9% of Pipeline Slots
+        Light Operations: 33.2% of Pipeline Slots
+            FP Arithmetic: 0.0% of uOps
+                FP x87: 0.0% of uOps
+                FP Scalar: 0.0% of uOps
+                FP Vector: 0.0% of uOps
+                    128-bit FP Vector: 0.0% of uOps
+                    256-bit FP Vector: 0.0% of uOps
+                    512-bit FP Vector: 0.0% of uOps
+            Memory Operations: 12.3% of Pipeline Slots
+            Branch Instructions: 6.1% of Pipeline Slots
+            Other: 14.7% of Pipeline Slots
+                Nop Instructions: 0.4% of Pipeline Slots
+        Heavy Operations: 2.7% of Pipeline Slots
+            Few Uops Instructions: 2.1% of Pipeline Slots
+            Microcode Sequencer: 0.6% of Pipeline Slots
+                Assists: 0.0% of Pipeline Slots
+                    FP Assists: 0.0% of Pipeline Slots
+                CISC: 0.6% of Pipeline Slots
+    Front-End Bound: 6.7% of Pipeline Slots
+        Front-End Latency: 1.4% of Pipeline Slots
+            ICache Misses: 0.1% of Clockticks
+                Code L2 Hit: 0.0% of Clockticks
+                Code L2 Miss: 0.3% of Clockticks
+            ITLB Misses: 0.2% of Clockticks
+                Code STLB Hit: 0.1% of Clockticks
+                Code STLB Miss: 0.1% of Clockticks
+                    Code STLB Miss 4K: 0.0% of Clockticks
+                    Code STLB Miss 2M: 0.0% of Clockticks
+            Branch Resteers: 0.7% of Clockticks
+                Mispredicts Resteers: 0.0% of Clockticks
+                Clears Resteers: 0.5% of Clockticks
+                Unknown Branches: 0.3% of Clockticks
+            MS Switches: 1.0% of Clockticks
+            Length Changing Prefixes: 0.0% of Clockticks
+            DSB Switches: 0.2% of Clockticks
+        Front-End Bandwidth: 5.3% of Pipeline Slots
+            Front-End Bandwidth MITE: 0.6% of Pipeline Slots
+                Decoder-0 Alone: 0.3% of Pipeline Slots
+                %MITE_4wide: 0.3% of Clockticks
+            Front-End Bandwidth DSB: 1.3% of Pipeline Slots
+            Front-End Bandwidth LSD: 1.6% of Pipeline Slots
+            MS: 0.4% of Pipeline Slots
+            (Info) DSB Coverage: 3.0%
+            (Info) LSD Coverage: 97.2%
+            (Info) DSB Misses: 1.0% of Pipeline Slots
+    Bad Speculation: 9.4% of Pipeline Slots
+        Branch Mispredict: 0.0% of Pipeline Slots
+            Other Mispredicts: 0.0% of Pipeline Slots
+        Machine Clears: 9.4% of Pipeline Slots
+            Other Nukes: 9.4% of Pipeline Slots
+    Back-End Bound: 48.0% of Pipeline Slots
+     | A significant portion of pipeline slots are remaining empty. When
+     | operations take too long in the back-end, they introduce bubbles in the
+     | pipeline that ultimately cause fewer pipeline slots containing useful
+     | work to be retired per cycle than the machine is capable to support. This
+     | opportunity cost results in slower execution. Long-latency operations
+     | like divides and memory operations can cause this, as can too many
+     | operations being directed to a single execution port (for example, more
+     | multiply operations arriving in the back-end per cycle than the execution
+     | unit can support).
+     |
+        Memory Bound: 27.8% of Pipeline Slots
+         | The metric value is high. This can indicate that the significant
+         | fraction of execution pipeline slots could be stalled due to demand
+         | memory load and stores. Use Memory Access analysis to have the metric
+         | breakdown by memory hierarchy, memory bandwidth information,
+         | correlation by memory objects.
+         |
+            L1 Bound: 12.3% of Clockticks
+             | This metric estimates how often the CPU was stalled without loads
+             | missing the L1 Data (L1D) cache. The L1D cache typically has the
+             | shortest latency. However, in certain cases like loads blocked on
+             | older stores, a load might suffer due to high latency even though
+             | it is being satisfied by the L1D. Another example is loads who
+             | miss in the TLB. These cases are characterized by execution unit
+             | stalls, while some non-completed demand load live in the machine
+             | without having that demand load missing the L1 cache.
+             |
+                DTLB Overhead: 0.5% of Clockticks
+                 | Issue: A significant portion of cycles is being spent
+                 | handling first-level data TLB misses.
+                 | 
+                 | Tips:
+                 | 
+                 | 1.  As with ordinary data caching, focus on improving data
+                 | locality and reducing the working-set size to minimize the
+                 | DTLB overhead.
+                 | 
+                 | 2. Consider using Profile-Guided Optimization (PGO) to
+                 | collocate frequently-used data on the same page.
+                 | 
+                 | 3. Try using larger page sizes for large amounts of
+                 | frequently-used data.
+                 |
+                    Load STLB Hit: 0.4% of Clockticks
+                    Load STLB Miss: 0.1% of Clockticks
+                        Load STLB Miss 4K: 0.0% of Clockticks
+                        Load STLB Miss 2M: 0.0% of Clockticks
+                        Load STLB Miss 1G: 0.0% of Clockticks
+                Loads Blocked by Store Forwarding: 1.8% of Clockticks
+                L1 Latency Dependency: 20.1% of Clockticks
+                 | This metric estimates the fraction of cycles with demand load
+                 | accesses that hit the L1D cache. The short latency of the L1D
+                 | cache may be exposed in pointer-chasing memory access
+                 | patterns as an example.
+                 |
+                Lock Latency: 0.3% of Clockticks
+                 | A significant fraction of CPU cycles spent handling cache
+                 | misses due to lock operations. Due to the microarchitecture
+                 | handling of locks, they are classified as L1 Bound regardless
+                 | of what memory source satisfied them. Note that this metric
+                 | value may be highlighted due to Store Latency issue.
+                 |
+                Split Loads: 0.0% of Clockticks
+                4K Aliasing: 1.2% of Clockticks
+                FB Full: 6.3% of Clockticks
+                 | This metric does a rough estimation of how often L1D Fill
+                 | Buffer unavailability limited additional L1D miss memory
+                 | access requests to proceed. The higher the metric value, the
+                 | deeper the memory hierarchy level the misses are satisfied
+                 | from. Often it hints on approaching bandwidth limits (to L2
+                 | cache, L3 cache or external memory). Avoid adding software
+                 | prefetches if indeed memory BW limited.
+                 |
+            L2 Bound: 6.6% of Clockticks
+             | This metric shows how often machine was stalled on L2 cache.
+             | Avoiding cache misses (L1 misses/L2 hits) will improve the
+             | latency and increase performance.
+             |
+                L2 Hit Latency: 37.9% of Clockticks
+                 | L2 Hit Latency
+                 |
+            L3 Bound: 0.4% of Clockticks
+                L3 Latency: 0.0% of Clockticks
+                SQ Full: 1.1% of Clockticks
+            DRAM Bound: 1.4% of Clockticks
+                Memory Bandwidth: 20.0% of Clockticks
+                Memory Latency: 20.1% of Clockticks
+            Store Bound: 25.7% of Clockticks
+             | Issue: CPU was stalled on store operations for a significant
+             | fraction of cycles.
+             | 
+             | Tips: Consider False Sharing analysis as your next step.
+             |
+                Store Latency: 46.2% of Clockticks
+                 | This metric represents a fraction of cycles the CPU spent
+                 | handling long-latency store misses (missing the 2nd level
+                 | cache). Consider avoiding/reducing unnecessary (or easily
+                 | loadable/computable) memory store. Note that this metric
+                 | value may be highlighted due to a Lock Latency issue.
+                 |
+                Split Stores: 0.0%
+                DTLB Store Overhead: 27.2% of Clockticks
+                 | Issue: A significant fraction of cycles is spent on handling
+                 | first-level data TLB store misses.
+                 | 
+                 | Tips:
+                 | 
+                 | 1. As with ordinary data caching, focus on improving data
+                 | locality and reducing working-set size to minimize the DTLB
+                 | overhead.
+                 | 
+                 | 2. Consider using Profile-Guided Optimization (PGO) to
+                 | collocate frequently-used data on the same page.
+                 | 
+                 | 3. Try using larger page sizes for large amounts of
+                 | frequently-used data.
+                 |
+                    Store STLB Hit: 24.3% of Clockticks
+                     | In significant fraction of cycles where the TLB was
+                     | missed by store accesses, hitting in the second-level TLB
+                     | (STLB).
+                     |
+                    Store STLB Miss: 2.9% of Clockticks
+                        Store STLB Miss 4K: 0.0% of Clockticks
+                        Store STLB Miss 2M: 0.0% of Clockticks
+                        Store STLB Miss 1G: 0.0% of Clockticks
+        Core Bound: 20.3% of Pipeline Slots
+         | This metric represents how much Core non-memory issues were of a
+         | bottleneck. Shortage in hardware compute resources, or dependencies
+         | software's instructions are both categorized under Core Bound. Hence
+         | it may indicate the machine ran out of an OOO resources, certain
+         | execution units are overloaded or dependencies in program's data- or
+         | instruction- flow are limiting the performance (e.g. FP-chained long-
+         | latency arithmetic operations).
+         |
+            Divider: 0.0% of Clockticks
+                FP Divider: 0.0% of Clockticks
+                INT Divider: 0.0% of Clockticks
+            Serializing Operations: 2.7% of Clockticks
+                Slow Pause: 0.0% of Clockticks
+            Port Utilization: 11.2% of Clockticks
+                Cycles of 0 Ports Utilized: 0.9% of Clockticks
+                    Mixing Vectors: 0.0% of Clockticks
+                Cycles of 1 Port Utilized: 7.6% of Clockticks
+                Cycles of 2 Ports Utilized: 7.6% of Clockticks
+                Cycles of 3+ Ports Utilized: 42.9% of Clockticks
+                    ALU Operation Utilization: 27.3% of Clockticks
+                        Port 0: 25.9% of Clockticks
+                        Port 1: 25.1% of Clockticks
+                        Port 5: 24.1% of Clockticks
+                        Port 6: 34.2% of Clockticks
+                    Load Operation Utilization: 27.1% of Clockticks
+                    Store Operation Utilization: 10.1% of Clockticks
+                Vector Capacity Usage (FPU): 0.0%
+    Average CPU Frequency: 4.568 GHz
+    Total Thread Count: 2
+    Paused Time: 0.237s
+Effective Physical Core Utilization: 12.5% (1.000 out of 8)
+ | The metric value is low, which may signal a poor physical CPU cores
+ | utilization caused by:
+ |     - load imbalance
+ |     - threading runtime overhead
+ |     - contended synchronization
+ |     - thread/process underutilization
+ |     - incorrect affinity that utilizes logical cores instead of physical
+ |       cores
+ | Explore sub-metrics to estimate the efficiency of MPI and OpenMP parallelism
+ | or run the Locks and Waits analysis to identify parallel bottlenecks for
+ | other parallel runtimes.
+ |
+    Effective Logical Core Utilization: 5.9% (0.939 out of 16)
+     | The metric value is low, which may signal a poor logical CPU cores
+     | utilization. Consider improving physical core utilization as the first
+     | step and then look at opportunities to utilize logical cores, which in
+     | some cases can improve processor throughput and overall performance of
+     | multi-threaded applications.
+     |
+Collection and Platform Info
+    Application Command Line: C:\dev\radix-hash-join\bin\gcc\v4_radix_csr.exe 
+    Operating System: Microsoft Windows 11
+    Computer Name: DESKTOP-E3A6NUS
+    Result Size: 30.0 MB 
+    Collection start time: 13:23:09 17/11/2026 UTC
+    Collection stop time: 13:23:12 17/11/2026 UTC
+    Collector Type: Event-based sampling driver
+    CPU
+        Name: Intel(R) microarchitecture code named Tigerlake H
+        Frequency: 2.304 GHz
+        Logical CPU Count: 16
+        Cache Allocation Technology
+            Level 2 capability: not detected
+            Level 3 capability: not detected
+
+If you want to skip descriptions of detected performance issues in the report,
+enter: vtune -report summary -report-knob show-issues=false -r <my_result_dir>.
+Alternatively, you may view the report in the csv format: vtune -report
+<report_name> -format=csv.
