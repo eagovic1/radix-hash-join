@@ -11,12 +11,12 @@
 $ErrorActionPreference = "Continue"
 $repo  = $PSScriptRoot
 $vtune = "${env:ProgramFiles(x86)}\Intel\oneAPI\vtune\latest\bin64\vtune.exe"
-$verzije = "naivni", "radix_cvorovi", "radix_lanac", "radix_csr", "radix_lanac_pool", "radix_lanac_opt"
+$verzije = "v1_naivni", "v2_radix_cvorovi", "v3_radix_lanac", "v4_radix_csr", "v5_radix_lanac_pool", "v6_radix_lanac_opt"
 
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $admin) { Write-Host "GRESKA: pokreni PowerShell kao administrator." -ForegroundColor Red; exit 1 }
-if (-not (Test-Path "$repo\bin\naivni.exe")) { Write-Host "GRESKA: prvo pokreni build.bat." -ForegroundColor Red; exit 1 }
+if (-not (Test-Path "$repo\bin\v1_naivni.exe")) { Write-Host "GRESKA: prvo pokreni build.bat." -ForegroundColor Red; exit 1 }
 
 New-Item -ItemType Directory -Force "$repo\docs", "$repo\vtune_rezultati" | Out-Null
 

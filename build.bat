@@ -36,12 +36,12 @@ rem /O2 = optimizacije (Release), /Zi + /DEBUG = simboli da VTune pokaze imena f
 rem /Qvec-report:2 = izvjestaj koje petlje su vektorizovane i zasto nisu (u bin\obj\<verzija>.log)
 set FLAGS=/nologo /O2 /Zi /EHsc /std:c++17 /W3 /Qvec-report:2
 
-call :prevedi 1 naivni           || exit /b 1
-call :prevedi 2 radix_cvorovi    || exit /b 1
-call :prevedi 3 radix_lanac      || exit /b 1
-call :prevedi 4 radix_csr        || exit /b 1
-call :prevedi 5 radix_lanac_pool || exit /b 1
-call :prevedi 6 radix_lanac_opt  || exit /b 1
+call :prevedi 1 v1_naivni           || exit /b 1
+call :prevedi 2 v2_radix_cvorovi    || exit /b 1
+call :prevedi 3 v3_radix_lanac      || exit /b 1
+call :prevedi 4 v4_radix_csr        || exit /b 1
+call :prevedi 5 v5_radix_lanac_pool || exit /b 1
+call :prevedi 6 v6_radix_lanac_opt  || exit /b 1
 
 echo.
 echo Gotovo. Programi su u bin\:

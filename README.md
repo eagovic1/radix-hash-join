@@ -133,7 +133,7 @@ Svaka verzija joina se prevodi u svoj `.exe`, koji pokreće samo tu verziju:
 build.bat
 ```
 
-Nastaju `bin\naivni.exe`, `bin\radix_cvorovi.exe`, `bin\radix_lanac.exe`, `bin\radix_csr.exe`, `bin\radix_lanac_pool.exe` i `bin\radix_lanac_opt.exe`.
+Nastaju `bin\v1_naivni.exe`, `bin\v2_radix_cvorovi.exe`, `bin\v3_radix_lanac.exe`, `bin\v4_radix_csr.exe`, `bin\v5_radix_lanac_pool.exe` i `bin\v6_radix_lanac_opt.exe`.
 Verzija 6 (`radix_opt.hpp`) je radix lanac pool sa software write-combining baferima pri particionisanju i `__restrict`. Sa B = 8 smanjuje Store Bound (DTLB), ali dodaje pogrešno predviđene skokove, pa je oko 5% sporija od verzije 5. Brža je tek od B ≈ 11.
 Treba Visual Studio 2022 sa "Desktop development with C++". Ako je instaliran VTune, koristi se ITT API, pa VTune mjeri samo join, bez generisanja podataka.
 
@@ -146,7 +146,7 @@ Iste verzije se mogu prevesti i GCC-om (MSYS2 UCRT64, `pacman -S mingw-w64-ucrt-
 Programi idu u `bin/gcc/`, pa se mogu porediti sa MSVC verzijama iz `bin/`. ITT API se prevodi iz VTune SDK izvora (`sdk/src/ittnotify`).
 GCC pravi DWARF simbole, a ne PDB, pa VTune možda neće pokazati imena funkcija.
 
-Argumenti: `naivni.exe [N_R] [N_S] [B] [sekunde]`. Podrazumijevane vrijednosti su 1M, 10M, B = 8 i 3 s.
+Argumenti: `v1_naivni.exe [N_R] [N_S] [B] [sekunde]`. Podrazumijevane vrijednosti su 1M, 10M, B = 8 i 3 s.
 Join se ponavlja dok ne prođe zadato vrijeme, jer VTune treba bar oko 1 s za pouzdane metrike (MUX reliability > 0.8).
 
 Za hardverske brojače (Microarchitecture Exploration) hipervizor mora biti isključen:

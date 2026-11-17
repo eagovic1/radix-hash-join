@@ -57,12 +57,12 @@ prevedi() {
     fi
 }
 
-prevedi 1 naivni
-prevedi 2 radix_cvorovi
-prevedi 3 radix_lanac
-prevedi 4 radix_csr
-prevedi 5 radix_lanac_pool
-prevedi 6 radix_lanac_opt
+prevedi 1 v1_naivni
+prevedi 2 v2_radix_cvorovi
+prevedi 3 v3_radix_lanac
+prevedi 4 v4_radix_csr
+prevedi 5 v5_radix_lanac_pool
+prevedi 6 v6_radix_lanac_opt
 
 echo
 echo "Gotovo. Programi su u $OUT/:"

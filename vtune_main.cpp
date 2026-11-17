@@ -2,13 +2,13 @@
 //
 // Isti izvorni fajl se prevodi sest puta (vidi build.bat), svaki put sa drugom
 // vrijednoscu VARIJANTA, pa nastane sest .exe fajlova:
-//   1 naivni.exe           - jedna hash tabela od cvorova za cijelu R
-//   2 radix_cvorovi.exe    - radix, bucket je lista cvorova
-//   3 radix_lanac.exe      - radix, lanac kroz nizove indeksa
-//   4 radix_csr.exe        - radix, bucket je uzastopan komad niza
-//   5 radix_lanac_pool.exe - radix lanac, baferi za particije zauzeti unaprijed
-//   6 radix_lanac_opt.exe  - kao 5, plus write-combining baferi pri particionisanju
-//                            i __restrict (vidi radix_opt.hpp)
+//   1 v1_naivni.exe           - jedna hash tabela od cvorova za cijelu R
+//   2 v2_radix_cvorovi.exe    - radix, bucket je lista cvorova
+//   3 v3_radix_lanac.exe      - radix, lanac kroz nizove indeksa
+//   4 v4_radix_csr.exe        - radix, bucket je uzastopan komad niza
+//   5 v5_radix_lanac_pool.exe - radix lanac, baferi za particije zauzeti unaprijed
+//   6 v6_radix_lanac_opt.exe  - kao 5, plus write-combining baferi pri particionisanju
+//                               i __restrict (vidi radix_opt.hpp)
 //
 // Svaki program:
 //   1) generise podatke (ne profilira se),
@@ -20,7 +20,7 @@
 // nade VTune), VTune prikuplja podatke samo izmedju __itt_resume i __itt_pause,
 // tj. samo za join, bez generisanja podataka.
 //
-// Pokretanje:  naivni.exe [N_R] [N_S] [B] [sekunde]
+// Pokretanje:  v1_naivni.exe [N_R] [N_S] [B] [sekunde]
 //   podrazumijevano N_R = 1 000 000, N_S = 10 000 000, B = 8, sekunde = 3
 //   (B se ignorise kod naivnog)
 
