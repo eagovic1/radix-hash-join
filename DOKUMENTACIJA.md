@@ -1,6 +1,6 @@
-# Hash join: pet verzija
+# Hash join: šest verzija
 
-Kratak pregled pet implementacija hash joina `R ⋈ S` po ključu (`R.key = S.key`), sa ključnim razlikama, rezultatima mjerenja i [poređenjem sa DuckDB-om](#poređenje-sa-duckdb-om). Uputstvo za pokretanje je u [README.md](README.md).
+Kratak pregled šest implementacija hash joina `R ⋈ S` po ključu (`R.key = S.key`), sa ključnim razlikama, rezultatima mjerenja, [profiliranjem u VTune-u](#profiliranje-u-vtune-u), [poređenjem sa DuckDB-om](#poređenje-sa-duckdb-om) i [poređenjem sa Balkesenovim radix joinom](#poređenje-sa-balkesenovim-radix-joinom-eth-zürich). Uputstvo za pokretanje je u [README.md](README.md).
 
 ## Zadatak
 
@@ -13,7 +13,7 @@ Hash join ima dvije faze:
 - **build:** od R napravi hash tabelu;
 - **probe:** za svaki red iz S potraži ključ u tabeli.
 
-## Pet verzija ukratko
+## Šest verzija ukratko
 
 | | Particionisanje | Raspored bucketa | Broj tabela |
 |---|---|---|---|
@@ -22,8 +22,11 @@ Hash join ima dvije faze:
 | **3. radix lanac** | da, 2^B particija | lanac kroz nizove indeksa (`LanacTabela`) | jedna, ponovo korištena |
 | **4. radix CSR** | da, 2^B particija | uzastopan komad jednog niza (`CsrTabela`) | jedna, ponovo korištena |
 | **5. radix lanac pool** | da, u bafere zauzete unaprijed | lanac kroz nizove indeksa (`LanacTabela`) | jedna, ponovo korištena |
+| **6. radix lanac opt** | da, u bafere zauzete unaprijed, preko write-combining bafera | lanac kroz nizove indeksa | jedna, zauzeta za najveću particiju |
 
-Naziv svake verzije je način joina + raspored hash tabele. Verzije 2–4 imaju isto particionisanje i razlikuju se samo po tome kako su redovi jednog bucketa smješteni u memoriji. Verzija 5 je verzija 3 kojoj se mijenja samo memorija za particije. Svaka sljedeća verzija mijenja jednu stvar, pa se u mjerenju vidi efekat svake promjene posebno.
+Naziv svake verzije je način joina + raspored hash tabele. Verzije 2–4 imaju isto particionisanje i razlikuju se samo po tome kako su redovi jednog bucketa smješteni u memoriji. Verzija 5 je verzija 3 kojoj se mijenja samo memorija za particije. Verzija 6 je verzija 5 sa optimizacijama particionisanja koje je predložila VTune analiza. Svaka sljedeća verzija mijenja jednu stvar, pa se u mjerenju vidi efekat svake promjene posebno.
+
+Verzije 1–5 mjeri [`main.cpp`](main.cpp) (tabele u [Rezultatima](#rezultati)). Verzija 6 postoji samo u programima za VTune ([`vtune_main.cpp`](vtune_main.cpp)), pa su njeni rezultati u sekcijama [6. Radix lanac opt](#6-radix-lanac-opt-write-combining-baferi) i [Profiliranje u VTune-u](#profiliranje-u-vtune-u).
 
 ## 1. Naivni hash join
 
@@ -127,21 +130,50 @@ verzija 5:    jednom, unaprijed  Rp.redovi.resize(N_R) ...
 
 Verzije 2–4 plaćaju page faultove u svakom pokretanju i zbog jednog detalja glibc-a: blok od desetina MB `malloc` dobija posebnim mapiranjem i vraća ga sistemu odmah nakon `free`, pa ga sljedeće pokretanje traži ispočetka.
 
+## 6. Radix lanac opt (write-combining baferi)
+
+Fajl: [`radix_opt.hpp`](radix_opt.hpp) (`particionisi_opt`, `join_particija_opt`). Postoji samo kao VTune program `v6_radix_lanac_opt.exe`.
+
+VTune je za verziju 5 pokazao da je ~20% ciklusa Store Bound, skoro sve zbog DTLB-a (DTLB Store Overhead ~31%, Store STLB Hit ~29%). Uzrok je particionisanje: sa B = 8 svaki red se upisuje u jednu od 256 particija, pa upisi stalno skaču po 256 različitih stranica od 4 KB, a L1 DTLB ima ~64 ulaza.
+
+Verzija 6 mijenja tri stvari u odnosu na verziju 5:
+
+1. **Software write-combining baferi** (tehnika iz Balkesen et al., ICDE 2013). Svaka particija ima bafer od jedne keš linije (64 B = 8 redova), poravnat na 64 B. Svi baferi (16 KB za B = 8) stanu u L1 i u 4 stranice. Kad se bafer napuni, cijela linija ide u particiju non-temporal upisom (`_mm_stream_si128`), koji zaobilazi keš. Upisa na udaljene stranice je 8× manje.
+2. **`__restrict` i lokalni pokazivači** u petljama (tehnika iz Lab1), da kompajler ne mora ponovo čitati pokazivače vektora u svakoj iteraciji.
+3. **Particionisanje i join su `noinline`**, pa ih VTune prikazuje kao posebne funkcije. Nizovi hash tabele se zauzimaju jednom, na veličinu najveće particije.
+
+**Rezultat: ciljani problem je riješen, ali verzija nije brža.** Mjereno GCC-om (-O2) na i7-11800H, Windows, prosjek 20 zagrijanih pokretanja, R = 1 M, S = 10 M:
+
+| B | particionisanje v5 | particionisanje v6 | join v5 | join v6 |
+|---|---|---|---|---|
+| 6 | 21,5 ms | 35,2 ms | 16,5 ms | 16,0 ms |
+| 8 | 31,3 ms | 34,4 ms | 13,7 ms | 13,0 ms |
+| 10 | 38,5 ms | 43,7 ms | 13,1 ms | 12,9 ms |
+| 12 | 62,6 ms | 50,8 ms | 12,7 ms | 12,7 ms |
+| 14 | 92,4 ms | 66,6 ms | 12,9 ms | 12,8 ms |
+
+- Join po particijama je 3–5% brži za B = 6–10.
+- Particionisanje sa write-combining baferima je brže tek od B ≈ 11. Tada ima 2048 ili više particija, više nego što STLB ima ulaza, pa v5 promašuje i drugi nivo TLB-a. Na B = 8 su promašaji samo L1 DTLB-a, koje procesor dobrim dijelom preklopi s drugim radom.
+- Najbolji ukupni rezultat i dalje ima verzija 5 sa B = 8 (45,4 prema 48,1 ms po joinu).
+
+VTune pokazuje i zašto (v5 → v6): Store Bound pada sa 19,6% na 6,4%, ali Bad Speculation raste sa 0% na 18% (provjera „je li bafer pun” je nepredvidiv skok za svaki red), L1 Bound sa 6,8% na 17,4% (bafer se čita odmah nakon upisa, pa store forwarding ne uspijeva), a broj instrukcija po redu sa 37,6 na 44,7. CPI je bolji (0,478 → 0,425), ali program je sporiji, jer radi više posla. Manji broj zastoja nije isto što i brži program.
+
 ## Pregled slabosti po verzijama
 
-| Slabost | naivni | radix čvorovi | radix lanac | radix CSR | radix lanac pool |
-|---|---|---|---|---|---|
-| [1] čvorovi sa `new` | ima | ima | – | – | – |
-| [2] kopija reda + pokazivač | ima | ima | – | djelimično (kopija, bez pokazivača) | – |
-| [3] `%` umjesto `&` | ima | ima | – | – | – |
-| [4] broj bucketa = n | ima | ima | ima | ima | ima |
-| [5] obilazak lanca | ima | ima | ima | – | ima |
-| [6] nova tabela po particiji | (jedna tabela) | ima | – | – | – |
-| nova memorija za particije u svakom pokretanju | (nema particija) | ima | ima | ima | – |
+| Slabost | naivni | radix čvorovi | radix lanac | radix CSR | radix lanac pool | radix lanac opt |
+|---|---|---|---|---|---|---|
+| [1] čvorovi sa `new` | ima | ima | – | – | – | – |
+| [2] kopija reda + pokazivač | ima | ima | – | djelimično (kopija, bez pokazivača) | – | – |
+| [3] `%` umjesto `&` | ima | ima | – | – | – | – |
+| [4] broj bucketa = n | ima | ima | ima | ima | ima | ima |
+| [5] obilazak lanca | ima | ima | ima | – | ima | ima |
+| [6] nova tabela po particiji | (jedna tabela) | ima | – | – | – | – |
+| nova memorija za particije u svakom pokretanju | (nema particija) | ima | ima | ima | – | – |
+| upis na 2^B stranica pri particionisanju (DTLB) | (nema particija) | ima | ima | ima | ima | – |
 
 ## Rezultati
 
-i7-11800H (8 jezgara; L1d 48 KB i L2 1,25 MB po jezgru, L3 24 MB), WSL2, jedna nit, medijana 10 mjerenja. Sve brojke u ovoj i sljedećoj sekciji (uključujući DuckDB) su iz jednog uzastopnog pokretanja. Prikazana je najbolja vrijednost B za svaku radix verziju. Faza 1 je kod naivnog build, a kod radix verzija particionisanje R i S. Faza 2 je kod naivnog probe, a kod radix verzija join po particijama.
+Verzije 1–5, izmjerene programom [`main.cpp`](main.cpp). i7-11800H (8 jezgara; L1d 48 KB i L2 1,25 MB po jezgru, L3 24 MB), WSL2, jedna nit, medijana 10 mjerenja. Sve brojke u ovoj i sljedećoj sekciji (uključujući DuckDB) su iz jednog uzastopnog pokretanja. Prikazana je najbolja vrijednost B za svaku radix verziju. Faza 1 je kod naivnog build, a kod radix verzija particionisanje R i S. Faza 2 je kod naivnog probe, a kod radix verzija join po particijama.
 
 **R = 1 M, S = 10 M**
 
@@ -164,6 +196,34 @@ i7-11800H (8 jezgara; L1d 48 KB i L2 1,25 MB po jezgru, L3 24 MB), WSL2, jedna n
 | radix lanac pool (B=6) | 41,2 ms | 41,0 ms | 82,2 ms | 6,39× | 0,20 |
 
 Mašina je između pokretanja programa dosta varirala (naivni 1 M: od ~160 do ~380 ms), pa apsolutna vremena iz različitih pokretanja nisu uporediva. Omjere treba gledati unutar iste tabele.
+
+## Profiliranje u VTune-u
+
+Svaka verzija se prevodi u svoj program (`v1_naivni.exe` … `v6_radix_lanac_opt.exe`, iz [`vtune_main.cpp`](vtune_main.cpp)), koji 3 s ponavlja samo svoj join. Generisanje podataka je isključeno ITT pauzom, pa VTune mjeri samo join. Analiza je Microarchitecture Exploration, GCC 16.2 (-O2), i7-11800H (Tiger Lake H), R = 1 M, S = 10 M, B = 8.
+
+- Sažeci: [`docs/gcc/`](docs/gcc/) (`v1_naivni_summary.txt` … `v6_radix_lanac_opt_summary.txt`)
+- Screenshotovi: [`docs/v1.png`](docs/v1.png) … [`docs/v6.png`](docs/v6.png)
+- Vizuelno poređenje: [`docs/vtune_poredjenje.html`](docs/vtune_poredjenje.html) (otvara se dvoklikom)
+
+| verzija | ms po joinu | CPI | instrukcije/red | Retiring | Memory Bound | DRAM Bound | Store Bound | Bad Speculation |
+|---|---|---|---|---|---|---|---|---|
+| v1 naivni | 228,3 | 1,212 | 72,1 | 17,7% | 62,5% | 59,0% | 0,1% | 0,0% |
+| v2 radix čvorovi | 106,2 | 0,459 | 91,4 | 44,3% | 19,0% | 0,9% | 13,2% | 4,4% |
+| v3 radix lanac | 61,3 | 0,567 | 43,7 | 34,1% | 34,1% | 1,5% | 29,3% | 2,1% |
+| v4 radix CSR | 67,1 | 0,488 | 55,3 | 35,9% | 27,8% | 1,4% | 25,7% | 9,4% |
+| v5 radix lanac pool | 45,4 | 0,478 | 37,6 | 46,2% | 38,5% | 1,1% | 19,6% | 0,0% |
+| v6 radix lanac opt | 48,1 | 0,425 | 44,7 | 45,0% | 20,5% | 1,1% | 6,4% | 18,0% |
+
+Vrijeme po joinu je iz posebnog pokretanja istih programa bez VTune-a. Instrukcije po redu su Instructions Retired podijeljene brojem joinova i brojem redova (11 M), pa su približne (±5%). Retiring, Bad Speculation i Memory Bound su % pipeline slotova, a DRAM i Store Bound % ciklusa.
+
+**Šta pokazuje:**
+
+1. **Naivni čeka na RAM.** 59% ciklusa je DRAM Bound i CPI je 1,2. Sve radix verzije spuštaju DRAM Bound na ~1%, jer tabela particije stane u keš.
+2. **Kod radix verzija usko grlo postaje upis pri particionisanju.** Store Bound je 20–29%, skoro sve zbog DTLB-a (upis na 256 stranica istovremeno). To je bio razlog za verziju 6.
+3. **Radix čvorovi imaju dobar CPI (0,46), a spori su.** Izvršavaju najviše instrukcija po redu (91), zbog `new`/`delete` za svaki čvor. CPI sam po sebi ne govori koja je verzija brža.
+4. **Verzija 6 rješava DTLB, ali plaća grananjem.** Store Bound pada na 6%, ali Bad Speculation raste na 18% i instrukcija po redu ima ~19% više (vidi [verziju 6](#6-radix-lanac-opt-write-combining-baferi)).
+
+CPI 0,25 je teoretski minimum za ovaj procesor (4 instrukcije po ciklusu). Za join, koji je po prirodi ograničen memorijom, CPI ~0,4–0,5 je dobar rezultat.
 
 ## Poređenje sa DuckDB-om
 
@@ -200,6 +260,34 @@ DuckDB-ovo vrijeme uključuje i posao oko joina (čitanje tabela, cjevovod opera
 - DuckDB je opšta baza: radi sa bilo kojim tipovima, NULL vrijednostima i upitima. Naš kod je specijalizovan za ovaj jedan slučaj (`uint32_t` ključevi, rezultat se samo broji i sabira). Pošteno je reći da je *specijalizovan radix join za ovaj slučaj brži od opšte baze kad tabela ne stane u keš*, a ne da je brži od DuckDB-a općenito.
 - Prema DuckDB-ovom dizajnu (rad *Saving Private Hash Join*, VLDB 2025), njegovo radix particionisanje služi prvenstveno za joinove veće od RAM-a i za paralelni build, a ne da particije stanu u keš. Kad sve stane u memoriju, join se ponaša kao join bez particionisanja, sa jednom tabelom za cijelu build stranu. To objašnjava pad performansi na 4 M.
 
+## Poređenje sa Balkesenovim radix joinom (ETH Zürich)
+
+Akademska referenca za radix join je implementacija Cagrija Balkesena (ETH Zürich, rad *Main-Memory Hash Joins on Multi-Core CPUs: Tuning to the Underlying Hardware*, ICDE 2013). Korišten je fork [mars-research/vldb13-eth-hashjoin](https://github.com/mars-research/vldb13-eth-hashjoin), algoritam PRO (parallel radix join optimized) sa jednom niti.
+
+Uslovi: sve u WSL2 na i7-11800H, isti GCC 15.2 i isti flagovi (`-O3 -msse4.2`) za oba koda, 8-bajtni redovi (`--disable-key8B`), R = 1 M, S = 10 M. Njegov podrazumijevani broj radix bita (18, u 2 prolaza) je podešen za 128 M redova, pa su isprobane kombinacije 8, 10, 12 i 14 bita u 1 i 2 prolaza. Najbolja je, kao i kod nas, B = 8 u jednom prolazu.
+
+Balkesen mjeri jedno pokretanje, a privremene bafere za particije ne popunjava prije mjerenja, pa njegovo vrijeme uključuje page faultove. Zato postoje dva poređenja:
+
+| | ms po joinu |
+|---|---|
+| **Hladno** (page faultovi ulaze u vrijeme) | |
+| Balkesen PRO, B = 8, 1 prolaz (medijana 5 pokretanja) | **56,5** |
+| naš radix lanac (v3), B = 8 | 71,0 |
+| **Zagrijano** (memorija za particije popunjena prije mjerenja) | |
+| Balkesen PRO, B = 8, 1 prolaz, uz `memset` u `alloc_aligned` (medijana 7) | **42,9** |
+| naš radix lanac pool (v5), B = 8 | 47,6 |
+| naš radix lanac opt (v6), B = 8 | 49,5 |
+
+Za zagrijano mjerenje je u Balkesenov kod dodan jedan `memset` u `alloc_aligned`, koji se izvršava prije početka mjerenja. Bez toga poređenje sa v5 ne bi bilo pošteno.
+
+**Šta pokazuje:** Balkesenov kod je ~10% brži od naše najbolje verzije zagrijano, a ~25% hladno. Algoritam joina po particijama (`bucket_chaining_join`) je praktično isti kao naš radix lanac. Razlike su sitne:
+
+- hash je samo `(key & MASK) >> B`, bez množenja (radi samo zato što su ključevi gusti; sa slučajnim ključevima bi raspodjela bila loša, a naš multiplikativni hash ne bi);
+- join samo broji parove, a naš sabira i checksum;
+- particionisanje radi nad sirovim nizovima.
+
+Write-combining (`--enable-swwc-part`) i prefetch su u njegovom kodu po zadanom isključeni, što se slaže s našim nalazom iz verzije 6 da se za ovu veličinu ne isplate.
+
 ## Ključni zaključci
 
 1. **Particionisanje rješava keš problem.** LLC promašaji padaju sa 1,2–2,2 na ~0,2 po redu, jer tabela particije stane u keš. Radix čvorovi su 1,8–2,2× brži od naivnog, i to sa istom, sporom tabelom.
@@ -209,3 +297,5 @@ DuckDB-ovo vrijeme uključuje i posao oko joina (čitanje tabela, cjevovod opera
 5. **Broj particija je kompromis.** Više particija daje manje tabele, ali skuplje particionisanje, jer se istovremeno piše na 2^B mjesta. Najbolje je B = 6–8.
 6. **Slabost [4] se na ovim podacima ne vidi.** Gusti ključevi daju savršenu raspodjelu po bucketima. Efekat bi se vidio tek sa slučajnim ključevima.
 7. **Industrijska baza potvrđuje problem.** DuckDB sa jednom niti je na 1 M malo brži od našeg najboljeg joina, ali na 4 M, kad mu hash tabela ne stane u keš, uspori ~17× i postaje ~7,5× sporiji od radix lanca. I sa 8 niti je na 4 M sporiji od našeg radix lanca sa jednom niti.
+8. **Uklanjanje uskog grla koje pokaže profiler ne znači automatski ubrzanje.** Verzija 6 spušta Store Bound sa 20% na 6%, ali dodaje pogrešno predviđene skokove i ~19% više instrukcija, pa je ~5% sporija od verzije 5. Write-combining se isplati tek od B ≈ 11. Brzinu treba mjeriti u vremenu po joinu, a VTune metrike služe da objasne zašto je neka verzija brža.
+9. **Akademska referenca je blizu.** Balkesenov radix join (ETH Zürich) je sa jednom niti ~10% brži od naše verzije 5. Algoritam je isti, a razlika je u sitnim stvarima (hash bez množenja, bez checksum-a).

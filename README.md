@@ -1,16 +1,17 @@
 # radix-hash-join
 
-Poređenje pet verzija hash joina dvije tabele `R ⋈ S` po ključu. Program izmjeri svih pet na istim podacima, radix verzije za više vrijednosti broja bitova B, i ispiše tabelu sa vremenima i cache promašajima. Isti join se može pokrenuti i u [DuckDB](https://duckdb.org)-u kao industrijskoj referenci.
+Poređenje šest verzija hash joina dvije tabele `R ⋈ S` po ključu. Program `main.cpp` izmjeri prvih pet na istim podacima, radix verzije za više vrijednosti broja bitova B, i ispiše tabelu sa vremenima i cache promašajima. Svih šest se prevodi i u posebne programe za profiliranje u Intel VTune-u. Isti join se može pokrenuti i u [DuckDB](https://duckdb.org)-u kao industrijskoj referenci.
 
 ## Sadržaj
 
-- [Pet verzija](#pet-verzija) · detaljnije u [DOKUMENTACIJA.md](DOKUMENTACIJA.md)
+- [Šest verzija](#šest-verzija) · detaljnije u [DOKUMENTACIJA.md](DOKUMENTACIJA.md)
 - Pokretanje: [Linux](#linux) · [Windows](#windows) · [macOS](#macos-samo-vrijeme)
 - [Poređenje sa DuckDB-om](#poređenje-sa-duckdb-om)
+- [Profiliranje u Intel VTune-u](#profiliranje-u-intel-vtune-u-windows)
 
-## Pet verzija
+## Šest verzija
 
-Naziv svake verzije je način joina + raspored hash tabele. Radix čvorovi, lanac i CSR imaju isto particionisanje i razlikuju se samo po tome kako su redovi jednog bucketa smješteni u memoriji. Radix lanac pool je radix lanac kojem se mijenja samo memorija za particije.
+Naziv svake verzije je način joina + raspored hash tabele. Radix čvorovi, lanac i CSR imaju isto particionisanje i razlikuju se samo po tome kako su redovi jednog bucketa smješteni u memoriji. Radix lanac pool je radix lanac kojem se mijenja samo memorija za particije. Radix lanac opt je radix lanac pool sa optimizacijama particionisanja koje je predložila VTune analiza.
 
 | Verzija | Šta radi | Hash tabela (raspored bucketa) |
 |---|---|---|
@@ -19,6 +20,7 @@ Naziv svake verzije je način joina + raspored hash tabele. Radix čvorovi, lana
 | **radix lanac** | isto particionisanje | lanac kroz nizove indeksa ([`lanac_tabela.hpp`](lanac_tabela.hpp)), jedna tabela za sve particije |
 | **radix CSR** | isto particionisanje | uzastopan komad jednog niza, bez lanca ([`csr_tabela.hpp`](csr_tabela.hpp)), jedna tabela za sve particije |
 | **radix lanac pool** | isto particionisanje, ali u bafere zauzete jednom, unaprijed (kao memorijski pool u bazi) | ista kao radix lanac |
+| **radix lanac opt** | kao radix lanac pool, ali particionisanje piše preko write-combining bafera od jedne keš linije, plus `__restrict` ([`radix_opt.hpp`](radix_opt.hpp)) | lanac kroz nizove indeksa, nizovi zauzeti jednom za najveću particiju |
 
 Tabela od čvorova je namjerno spora referentna verzija: na vrhu [`cvor_tabela.hpp`](cvor_tabela.hpp) su numerisane njene slabosti [1]–[6]. Radix lanac uklanja [1], [2], [3] i [6], a radix CSR uklanja i [5] (obilazak lanca). [4] ostaje u svim verzijama.
 
@@ -26,11 +28,13 @@ Na našim podacima (gusti ključevi, savršeni lanci od jednog reda) radix CSR i
 
 Radix lanac pool ne traži novu memoriju od operativnog sistema u svakom pokretanju, pa ne plaća page faultove, i particionisanje je ~2× brže. To je ista implementacija algoritma kao radix lanac, samo sa memorijom zauzetom izvan mjerenja. Ubrzanje je stvarno kad isti proces izvršava mnogo joinova i ponovo koristi memoriju (kao baza sa memorijskim poolom). Za jedan, izolovan join pool verzija traje isto kao radix lanac. Detaljnije u [DOKUMENTACIJA.md](DOKUMENTACIJA.md#5-radix-lanac-pool-memorija-za-particije-zauzeta-unaprijed).
 
+Radix lanac opt smanjuje Store Bound (DTLB) iz VTune analize radix lanac poola sa ~20% na ~6%, ali dodaje pogrešno predviđene skokove, pa je sa B = 8 oko 5% sporija. Brža je tek od B ≈ 11. Postoji samo kao VTune program, nije u `main.cpp`. Detaljnije u [DOKUMENTACIJA.md](DOKUMENTACIJA.md#6-radix-lanac-opt-write-combining-baferi).
+
 ## Fajlovi
 
 | Fajl | Sadržaj |
 |---|---|
-| [`main.cpp`](main.cpp) | mjeri svih pet verzija (radix za B = 2, 4, 6, 8) i ispisuje tabelu |
+| [`main.cpp`](main.cpp) | mjeri verzije 1–5 (radix za B = 2, 4, 6, 8) i ispisuje tabelu |
 | [`hash_join.hpp`](hash_join.hpp) | naivni hash join: build (hash tabela od cijele R) + probe (svaki red S) |
 | [`radix_join.hpp`](radix_join.hpp) | particionisanje R i S (u novu ili postojeću memoriju), i join po particijama za čvorove, lanac i CSR |
 | [`cvor_tabela.hpp`](cvor_tabela.hpp) | `CvorTabela`: lančana hash tabela sa čvorovima, sa spiskom namjernih slabosti za optimizaciju |
@@ -38,6 +42,12 @@ Radix lanac pool ne traži novu memoriju od operativnog sistema u svakom pokreta
 | [`csr_tabela.hpp`](csr_tabela.hpp) | `CsrTabela`: bucket je uzastopan komad niza (histogram → prefiksni zbir → raspodjela) |
 | [`common.hpp`](common.hpp) | generisanje podataka, provjera rezultata, mjerenje vremena i cache promašaja |
 | [`duckdb_join.py`](duckdb_join.py) | isti join u DuckDB-u, za poređenje |
+| [`radix_opt.hpp`](radix_opt.hpp) | verzija 6: particionisanje preko write-combining bafera i join sa nizovima zauzetim jednom |
+| [`vtune_main.cpp`](vtune_main.cpp) | jedna verzija joina po programu (`VARIJANTA` 1–6), za VTune |
+| [`build.bat`](build.bat) / [`build_gcc.sh`](build_gcc.sh) | prevode `vtune_main.cpp` u 6 programa, MSVC-om (`bin\`) ili GCC-om (`bin\gcc\`) |
+| [`vtune_sve.ps1`](vtune_sve.ps1) | pokreće VTune analizu za svih 6 programa i snima sažetke u `docs\` |
+| [`docs/vtune_poredjenje.html`](docs/vtune_poredjenje.html) | vizuelno poređenje VTune rezultata svih 6 verzija |
+| [`vizualizacija.html`](vizualizacija.html) | vizualizacija rasporeda tabele od čvorova i lanca |
 
 ## Pokretanje
 
@@ -152,6 +162,14 @@ Join se ponavlja dok ne prođe zadato vrijeme, jer VTune treba bar oko 1 s za po
 Za hardverske brojače (Microarchitecture Exploration) hipervizor mora biti isključen:
 `bcdedit /set hypervisorlaunchtype off`, pa restart. WSL tada ne radi. Vraća se sa `auto`.
 
-`vtune_sve.ps1` profilira svih 6 verzija i snima sažetke u `docs/gcc/` (ili `docs/msvc/` sa `-Kompajler msvc`).
+`vtune_sve.ps1` profilira svih 6 verzija i snima sažetke u `docs/gcc/` (ili `docs/msvc/` sa `-Kompajler msvc`). Pokreće se iz PowerShella otvorenog kao administrator:
+
+```powershell
+cd C:\dev\radix-hash-join
+powershell -ExecutionPolicy Bypass -File .\vtune_sve.ps1                  # GCC programi iz bin\gcc\
+powershell -ExecutionPolicy Bypass -File .\vtune_sve.ps1 -Kompajler msvc  # MSVC programi iz bin\
+```
+
+Puni rezultati za VTune GUI (File → Open → Result) su u `vtune_rezultati\<kompajler>\<verzija>\`. Screenshotovi sažetaka su u `docs/v1.png` … `docs/v6.png`, a tabela i zaključci u [DOKUMENTACIJA.md](DOKUMENTACIJA.md#profiliranje-u-vtune-u).
 
 Vizuelno poređenje GCC rezultata je u [`docs/vtune_poredjenje.html`](docs/vtune_poredjenje.html) (otvara se dvoklikom, bez interneta). Podaci su ugrađeni iz `docs/gcc/vtune_gcc_tigerlake.csv` (VTune metrike iz sažetaka) i `docs/gcc/vrijeme_gcc_tigerlake.csv` (vrijeme po joinu, mjereno bez VTune-a).
